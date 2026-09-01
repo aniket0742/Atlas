@@ -78,6 +78,9 @@ Reasoning for these and every other significant choice is in
               answer + citations (or an explicit refusal)
 ```
 
+The API also serves a static inspection console at `/` — see
+[Inspection console](#inspection-console).
+
 One process, one database. Redis is in `docker-compose.yml` for Phase 3 and 6
 but is not used yet. There is no message broker — see
 [ADR-0002](Decision.md#adr-0002-no-kafka-a-queue-is-deferred-and-will-probably-be-postgres)
@@ -93,7 +96,9 @@ for why Kafka was considered and rejected.
 | Migrations | numbered `.sql` + checksum | index DDL that autogenerate cannot model ([ADR-0006](Decision.md)) |
 | Embeddings | `BAAI/bge-small-en-v1.5` via fastembed (local, CPU, ONNX) | free re-indexing makes retrieval experiments affordable ([ADR-0007](Decision.md)) |
 | Generation | Google Gemini free tier, behind a `Protocol` | no paid dependency; swappable ([ADR-0008](Decision.md)) |
-| Tests | pytest | 72 unit tests run with no database and no API key |
+| UI | plain HTML/CSS/JS served by FastAPI | same-origin, no build step, no npm ([ADR-0015](Decision.md)) |
+| Local env | Docker Compose (api + postgres + redis) | one command starts everything ([ADR-0016](Decision.md)) |
+| Tests | pytest | 76 unit tests run with no database and no API key |
 
 ## Running it locally
 
@@ -107,17 +112,25 @@ for why Kafka was considered and rejected.
 ### Setup
 
 ```bash
+cp .env.example .env            # then put your GEMINI_API_KEY in it
+docker compose up -d --build    # api + postgres + redis; migrations run on start
+```
+
+Then open **<http://localhost:8000>**.
+
+That is the whole setup. The API is containerised ([ADR-0016](Decision.md)), so
+no host Python environment is needed to run Atlas. The first query downloads
+~67MB of ONNX embedding weights into the `atlas_models` volume, where they
+survive image rebuilds.
+
+For the CLI, the test suite, or the eval harness, you also want a local
+environment:
+
+```bash
 python -m venv .venv
 .venv/Scripts/activate          # Windows;  source .venv/bin/activate elsewhere
 pip install -e ".[dev]"
-
-cp .env.example .env            # then put your GEMINI_API_KEY in it
-
-docker compose up -d            # Postgres on 5432, Redis on 6379
-atlas migrate                   # apply schema
 ```
-
-The first embedding call downloads ~67MB of ONNX weights into `.models/`.
 
 ### Confirm your model
 
@@ -140,11 +153,37 @@ atlas query "How long do customers have to request a refund?"
 atlas query "How many vacation days do employees get?"   # should refuse
 ```
 
-Or run the HTTP API:
+Or run the API on the host instead of in a container:
 
 ```bash
-atlas serve                     # http://127.0.0.1:8000/docs
+atlas serve                     # http://127.0.0.1:8000
 ```
+
+## Inspection console
+
+`http://localhost:8000` serves a single-page console for driving and inspecting
+the system. It is a technical instrument rather than a chat product: everything
+it shows is something the API already returns.
+
+| Panel | Shows |
+|---|---|
+| Ask | question, with optional `top_k` and `min_similarity` overrides |
+| Answer | the answer, or the refusal and its `refusal_reason` |
+| Citations | quote, document, character span, page, and a **verbatim / not verbatim** badge |
+| Retrieved chunks | every chunk sent to the model, in rank order, with similarity scores |
+| Request | per-stage latency (embed / search / LLM / total) and token usage |
+| Corpus | document and chunk counts, per-document indexing status |
+| Add a document | upload and index a file, with an explicit processing state |
+
+The **verbatim badge** is the panel worth looking at: it makes the otherwise
+invisible groundedness guarantee visible. A citation is only listed at all if its
+id matched a chunk actually sent to the model, and the badge says whether the
+quote was found character-for-character in that chunk.
+
+Responses are **not streamed** — the request blocks until the model returns, and
+the console says so rather than animating text that has already arrived
+([ADR-0015](Decision.md)). Uploads are synchronous for the same reason Phase 1
+ingestion is, so the upload panel states what it is doing while it waits.
 
 ## API
 
@@ -242,6 +281,11 @@ Current, and honest:
   interactively, slow for bulk ingestion. Phase 6 target.
 - **No OCR.** Scanned PDFs fail ingestion with an explicit message rather than
   indexing as empty.
+- **No streaming.** `/v1/query` returns one complete response, so the console
+  shows a spinner for the duration of the model call rather than incremental
+  text. Deferred deliberately ([ADR-0015](Decision.md)).
+- **The container image is a development image.** Editable install, root user,
+  bind-mounted source. Phase 7 produces a deployment image.
 - **Prompt injection is contained, not solved.** Retrieved text cannot mint a
   citation and, in Phase 1, cannot trigger an action because there are no tools.
   A document that states something false will be faithfully reported as stating
@@ -276,9 +320,13 @@ src/atlas/
   eval/         dataset format, metrics, runner
   ingest/       parsers, normalisation, chunking, pipeline
   providers/    embedding + LLM protocols, Gemini, fastembed, offline fakes
+  api/static/   the inspection console (3 files, no build step)
   cli.py        migrate / ingest / query / eval / models / serve
 migrations/     numbered SQL
+scripts/        calibrate_floor.py (experiment E2)
 eval/corpus/    sample knowledge base
 eval/datasets/  labelled evaluation queries
+eval/baselines/ frozen Phase 1 retrieval numbers Phase 2 must beat
 tests/          unit tests (no infra) + integration tests (marked)
+Dockerfile      API image (development)
 ```

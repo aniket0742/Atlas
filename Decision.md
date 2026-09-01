@@ -538,3 +538,103 @@ Phase 1 and *running* it, rather than trusting it because the code looks right.
 
 **Guard.** A regression test asserts nDCG stays within [0, 1] for inputs where
 several chunks share a label.
+
+---
+
+## ADR-0015: A static inspection console, not a frontend framework
+
+**Status:** accepted (Phase 1)
+
+**Problem.** The system needed to be demonstrable and inspectable through a
+browser rather than only through CLI output, without frontend work displacing
+the backend and retrieval work that is the point of the project.
+
+**Alternatives considered.**
+
+- *React or Svelte with Vite.* Component reuse, familiar tooling, and a story
+  interviewers recognise. Costs a `package.json`, a lockfile, `node_modules`, a
+  build step, a bundler configuration, a second container in compose, and a
+  second dependency-update surface — to render a form and three lists.
+- *A separate static container behind nginx.* Keeps concerns separate; adds a
+  service, a cross-origin boundary and therefore CORS configuration.
+- *Plain HTML/CSS/JS served by the existing FastAPI app.* No build step, no
+  tooling, same origin.
+
+**Decision.** Three static files (`index.html`, `app.css`, `app.js`) served by
+FastAPI: `/` returns the page, `/static` is a mount.
+
+**Why.** Same-origin means no CORS, no second port, and no auth story to invent
+twice when Phase 5 arrives. More usefully, it makes the console a plain client of
+the documented API — **it cannot display anything the API does not already
+return**, which keeps the API honest instead of letting a capable frontend paper
+over gaps. Adding `document_external_id` to the evidence response was a gap the
+console surfaced immediately.
+
+The whole console is ~350 lines. A framework's advantages start where this ends.
+
+**Trade-offs.** No components, no reactive state, manual DOM construction. It
+will get unwieldy somewhere past ~500 lines; that is the signal to introduce a
+framework, with a reason to point at rather than a default to inherit.
+
+**Security note.** Document titles, heading paths and chunk text all originate in
+uploaded files, so they are untrusted. The console builds every node with
+`textContent` and never assigns response data to `innerHTML`, which makes stored
+XSS structurally impossible rather than a review item.
+
+**Not included.** Streaming. `/v1/query` returns one complete JSON response, so
+the console shows a spinner and then the whole answer. Server-Sent Events are a
+different endpoint shape and are deferred to a later phase; a fake typewriter
+animation over an already-complete response would be a lie about how the system
+works.
+
+**Reconsider if.** The console outgrows one file per concern, or a genuinely
+interactive view (a retrieval-comparison workbench in Phase 2) needs real state
+management.
+
+---
+
+## ADR-0016: The API runs in Docker Compose
+
+**Status:** accepted (Phase 1)
+
+**Problem.** Postgres and Redis were containerised while the API ran on the host,
+so "run Atlas" meant starting containers *and* a host process with a matching
+Python environment. The console needed to be servable as part of the local
+environment.
+
+**Decision.** A `Dockerfile` for the API and an `api` service in
+`docker-compose.yml`. `docker compose up` now starts everything, applies
+migrations, and serves the console at `http://localhost:8000`.
+
+**Four things this forced, each worth stating.**
+
+1. **`localhost` is wrong inside a container.** `ATLAS_DATABASE_URL` is overridden
+   in the compose `environment:` block to `postgres:5432` — the service name on
+   the compose network. `environment` takes precedence over `env_file`, so the
+   host-oriented value in `.env` stays correct for CLI use on the host.
+2. **The model cache is a named volume.** `ATLAS_MODEL_CACHE_DIR=/models` backed
+   by `atlas_models`, so the ~67MB ONNX model downloads once and survives image
+   rebuilds. Baking it into the image would add that to every layer.
+3. **The secret never enters the image.** `.env` is in `.dockerignore` and the key
+   arrives as an environment variable at run time. Verified: `.env` is absent from
+   the image and the key does not appear in image history.
+4. **Editable install.** The migration runner locates `migrations/` relative to
+   the package, which resolves for a source layout but not for a package copied
+   into `site-packages`. `pip install -e .` with the source at `/app` keeps that
+   working without adding a configuration knob. A deployment image in Phase 7
+   will need to address this properly.
+
+`env_file` is marked `required: false` so a fresh clone can `docker compose up`
+before creating a `.env`; the app then starts and fails on the first query, which
+is a clearer error than compose refusing to start.
+
+`./src` is bind-mounted over the editable install so code and console edits take
+effect on restart without a rebuild. That is a local-development convenience and
+is explicitly not how a deployment image should behave.
+
+**Trade-offs.** Image build takes a few minutes, mostly `onnxruntime`. Compose now
+rebuilds on dependency changes. No Kubernetes, no registry, no orchestration —
+Phase 7 addresses deployment.
+
+**Reconsider.** Phase 7, which needs a non-editable install, a pinned base image
+digest, and a non-root user.

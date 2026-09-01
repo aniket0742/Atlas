@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atlas — inspection console</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">▦</span>
+    <div>
+      <h1>Atlas</h1>
+      <p class="sub">retrieval inspection console</p>
+    </div>
+  </div>
+  <div id="health" class="health">
+    <span class="dot dot-idle"></span><span class="health-text">checking…</span>
+  </div>
+</header>
+
+<main>
+  <!-- ── Left: ask and inspect ─────────────────────────────────────────── -->
+  <section class="col col-main">
+
+    <div class="panel">
+      <h2>Ask</h2>
+      <form id="ask-form">
+        <textarea id="question" rows="3" placeholder="e.g. How long do customers have to request a refund?" required></textarea>
+        <div class="controls">
+          <label>top_k
+            <input id="top-k" type="number" min="1" max="50" placeholder="8">
+          </label>
+          <label>min_similarity
+            <input id="min-sim" type="number" min="0" max="1" step="0.01" placeholder="0.60">
+          </label>
+          <button id="ask-btn" type="submit">Ask</button>
+        </div>
+        <p class="hint">Blank fields use the server defaults. Responses are not streamed — the request blocks until the model returns.</p>
+      </form>
+    </div>
+
+    <div id="error" class="panel panel-error" hidden>
+      <h2>Request failed</h2>
+      <pre id="error-body"></pre>
+    </div>
+
+    <div id="answer-panel" class="panel" hidden>
+      <h2>Answer <span id="answer-badge" class="badge"></span></h2>
+      <p id="refusal-reason" class="refusal" hidden></p>
+      <div id="answer-text" class="answer"></div>
+    </div>
+
+    <div id="citations-panel" class="panel" hidden>
+      <h2>Citations <span id="citation-count" class="count"></span></h2>
+      <p class="hint">A citation is only shown if its id matched a chunk actually sent to the model. <em>verbatim</em> means the quote was found character-for-character in that chunk.</p>
+      <ol id="citations" class="citations"></ol>
+    </div>
+
+    <div id="evidence-panel" class="panel" hidden>
+      <h2>Retrieved chunks <span id="evidence-count" class="count"></span></h2>
+      <p class="hint">Everything retrieval returned above the similarity floor, in rank order. These are the chunks the model was given.</p>
+      <ol id="evidence" class="evidence"></ol>
+    </div>
+
+  </section>
+
+  <!-- ── Right: corpus and ingestion ───────────────────────────────────── -->
+  <aside class="col col-side">
+
+    <div id="metrics-panel" class="panel" hidden>
+      <h2>Request</h2>
+      <dl id="timings" class="metrics"></dl>
+    </div>
+
+    <div class="panel">
+      <h2>Corpus</h2>
+      <dl id="stats" class="metrics"><dd class="muted">loading…</dd></dl>
+    </div>
+
+    <div class="panel">
+      <h2>Add a document</h2>
+      <form id="upload-form">
+        <input id="file" type="file" required>
+        <label>source
+          <input id="source" type="text" value="handbook">
+        </label>
+        <button id="upload-btn" type="submit">Upload &amp; index</button>
+      </form>
+      <p class="hint">Ingestion is synchronous in Phase 1: parsing, chunking and embedding all happen inside this request, so a large file will take a while. Phase 3 moves it to a queue.</p>
+      <div id="upload-status" class="upload-status" hidden></div>
+    </div>
+
+    <div class="panel">
+      <h2>Documents</h2>
+      <ul id="documents" class="documents"><li class="muted">loading…</li></ul>
+    </div>
+
+  </aside>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

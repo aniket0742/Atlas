@@ -83,6 +83,9 @@ class CitationOut(BaseModel):
 class EvidenceOut(BaseModel):
     chunk_id: uuid.UUID
     document_id: uuid.UUID
+    # Same stable identifier the citations carry, so the evidence panel and the
+    # citation list name a document the same way.
+    document_external_id: str
     document_title: str | None
     source_name: str
     heading_path: list[str]

@@ -1,0 +1,31 @@
+# Secrets must never enter the image. The API key reaches the container as an
+# environment variable from compose at run time, never baked into a layer --
+# a COPYed .env stays in the image history even if a later layer deletes it.
+.env
+.env.*
+!.env.example
+
+# Host-specific and regenerable.
+.venv/
+.models/
+.git/
+.gitignore
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+eval/results/
+desktop.ini
+
+# Not needed at runtime.
+docs/
+scripts/
+tests/
+Decision.md
+docker-compose.yml
+Dockerfile
+.dockerignore

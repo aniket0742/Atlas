@@ -13,10 +13,12 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from atlas.answer.service import AnswerService
 from atlas.api import schemas
@@ -83,6 +85,18 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# The inspection console is served by this app rather than by a separate
+# frontend service. Same-origin means no CORS configuration and no second port,
+# and it keeps the UI a plain client of the documented API -- it cannot show
+# anything the API does not already return.
+_STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def console() -> FileResponse:
+    return FileResponse(_STATIC_DIR / "index.html")
 
 
 # --------------------------------------------------------------------------
@@ -301,6 +315,7 @@ def _to_query_response(result: Answer, *, include_evidence: bool) -> schemas.Que
                 schemas.EvidenceOut(
                     chunk_id=e.chunk_id,
                     document_id=e.document_id,
+                    document_external_id=e.document_external_id,
                     document_title=e.document_title,
                     source_name=e.source_name,
                     heading_path=e.heading_path,

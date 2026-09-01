@@ -5,6 +5,41 @@
 name: atlas
 
 services:
+  api:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Brings GEMINI_API_KEY and the tuning values in from your .env. Marked
+    # optional so `docker compose up` still works on a fresh clone before you
+    # have made one -- the app then starts and fails only on the first query,
+    # which is a clearer error than compose refusing to start.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Overrides whatever .env says. Inside the compose network the database
+      # is reachable as "postgres", never as localhost -- localhost in a
+      # container is the container itself.
+      ATLAS_DATABASE_URL: postgresql://atlas:atlas@postgres:5432/atlas
+      # Named volume, so the ~67MB ONNX model is downloaded once and survives
+      # image rebuilds.
+      ATLAS_MODEL_CACHE_DIR: /models
+    ports:
+      - "8000:8000"
+    volumes:
+      - atlas_models:/models
+      # Source is bind-mounted over the editable install so code and UI edits
+      # take effect on restart without an image rebuild. Local development
+      # convenience only; a deployment image would not do this.
+      - ./src:/app/src
+      - ./eval:/app/eval:ro
+    # Migrations run before the server accepts traffic. Safe to repeat: the
+    # runner is idempotent and records what it has applied.
+    command: >
+      sh -c "atlas migrate &&
+             uvicorn atlas.api.app:app --host 0.0.0.0 --port 8000"
+
   postgres:
     # pgvector ships prebuilt images tracking upstream Postgres releases.
     # Pinned by digest-less tag on purpose: we want patch updates, not major ones.
@@ -46,3 +81,4 @@ services:
 volumes:
   atlas_pgdata:
   atlas_redisdata:
+  atlas_models:
