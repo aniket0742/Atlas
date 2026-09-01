@@ -1,0 +1,806 @@
+{
+  "label": "dense-baseline-k2",
+  "created_at": "2026-09-01T15:35:04.922177+00:00",
+  "dataset": {
+    "path": "eval\\datasets\\smoke.jsonl",
+    "queries": 19,
+    "answerable": 16,
+    "unanswerable": 3
+  },
+  "config": {
+    "k": 2,
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "llm_model": null,
+    "chunk_target_tokens": 320,
+    "chunk_overlap_tokens": 64,
+    "chunk_min_tokens": 32,
+    "min_similarity": 0.3,
+    "retrieval": "dense",
+    "python": "3.11.4"
+  },
+  "summary": {
+    "recall_at_k": {
+      "mean": 1.0,
+      "ci95": [
+        1.0,
+        1.0
+      ]
+    },
+    "precision_at_k": {
+      "mean": 0.5625,
+      "ci95": [
+        0.5,
+        0.6562
+      ]
+    },
+    "mrr": {
+      "mean": 0.9688,
+      "ci95": [
+        0.9062,
+        1.0
+      ]
+    },
+    "ndcg_at_k": {
+      "mean": 0.9769,
+      "ci95": [
+        0.9308,
+        1.0
+      ]
+    }
+  },
+  "wall_seconds": 1.39,
+  "queries": [
+    {
+      "query_id": "refund-window",
+      "question": "How long do customers have to request a refund?",
+      "answerable": true,
+      "scores": {
+        "query_id": "refund-window",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 0.8767,
+          "heading_path": [
+            "Billing and Refunds",
+            "Refund window"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/billing.md",
+          "score": 0.7765,
+          "heading_path": [
+            "Billing and Refunds",
+            "Chargebacks"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "refund-settle-time",
+      "question": "How long does a refund take to appear on the customer's card?",
+      "answerable": true,
+      "scores": {
+        "query_id": "refund-settle-time",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 0.8364,
+          "heading_path": [
+            "Billing and Refunds",
+            "Refund window"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/billing.md",
+          "score": 0.7111,
+          "heading_path": [
+            "Billing and Refunds",
+            "Chargebacks"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "annual-proration",
+      "question": "If someone cancels an annual plan halfway through, what do they get back?",
+      "answerable": true,
+      "scores": {
+        "query_id": "annual-proration",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 0.8127,
+          "heading_path": [
+            "Billing and Refunds",
+            "Annual plans"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/billing.md",
+          "score": 0.6922,
+          "heading_path": [
+            "Billing and Refunds",
+            "Chargebacks"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "failed-payment-grace",
+      "question": "What happens to an account after a payment fails repeatedly?",
+      "answerable": true,
+      "scores": {
+        "query_id": "failed-payment-grace",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 0.7638,
+          "heading_path": [
+            "Billing and Refunds",
+            "Failed payments"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/billing.md",
+          "score": 0.742,
+          "heading_path": [
+            "Billing and Refunds",
+            "Chargebacks"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "chargeback-consequence",
+      "question": "What happens if a customer disputes a charge with their bank instead of contacting us?",
+      "answerable": true,
+      "scores": {
+        "query_id": "chargeback-consequence",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 0.7552,
+          "heading_path": [
+            "Billing and Refunds",
+            "Chargebacks"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/billing.md",
+          "score": 0.6303,
+          "heading_path": [
+            "Billing and Refunds",
+            "Refund window"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "access-token-lifetime",
+      "question": "How long is an access token valid?",
+      "answerable": true,
+      "scores": {
+        "query_id": "access-token-lifetime",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/authentication.md",
+          "score": 0.8725,
+          "heading_path": [
+            "Authentication",
+            "Token lifetime"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "engineering/authentication.md",
+          "score": 0.7931,
+          "heading_path": [
+            "Authentication",
+            "Session revocation"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "refresh-token-reuse",
+      "question": "What happens if an old refresh token is presented again?",
+      "answerable": true,
+      "scores": {
+        "query_id": "refresh-token-reuse",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/authentication.md",
+          "score": 0.7905,
+          "heading_path": [
+            "Authentication",
+            "Token lifetime"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "engineering/authentication.md",
+          "score": 0.7255,
+          "heading_path": [
+            "Authentication",
+            "Session revocation"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "revocation-delay",
+      "question": "After we revoke a session, can the user still make API calls?",
+      "answerable": true,
+      "scores": {
+        "query_id": "revocation-delay",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/authentication.md",
+          "score": 0.7343,
+          "heading_path": [
+            "Authentication",
+            "Session revocation"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "engineering/authentication.md",
+          "score": 0.6414,
+          "heading_path": [
+            "Authentication",
+            "Token lifetime"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "service-account-scope",
+      "question": "Can a service account access more than one tenant?",
+      "answerable": true,
+      "scores": {
+        "query_id": "service-account-scope",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/authentication.md",
+          "score": 0.8122,
+          "heading_path": [
+            "Authentication",
+            "Service accounts"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "engineering/data-retention.md",
+          "score": 0.5462,
+          "heading_path": [
+            "Data Retention",
+            "Customer data"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "rollback-after-migration",
+      "question": "Why can't we just roll back a release that included a schema change?",
+      "answerable": true,
+      "scores": {
+        "query_id": "rollback-after-migration",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/deployments.md",
+          "score": 0.7057,
+          "heading_path": [
+            "Deployments",
+            "Rollback"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "engineering/deployments.md",
+          "score": 0.6824,
+          "heading_path": [
+            "Deployments",
+            "Feature flags"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "release-days",
+      "question": "Which days do we normally ship?",
+      "answerable": true,
+      "scores": {
+        "query_id": "release-days",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/deployments.md",
+          "score": 0.7026,
+          "heading_path": [
+            "Deployments",
+            "Release cadence"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/support.md",
+          "score": 0.6102,
+          "heading_path": [
+            "Support Policy",
+            "Response targets"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "audit-log-retention",
+      "question": "How long do we keep audit logs, and why that long?",
+      "answerable": true,
+      "scores": {
+        "query_id": "audit-log-retention",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/data-retention.md",
+          "score": 0.8785,
+          "heading_path": [
+            "Data Retention",
+            "Logs"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "engineering/data-retention.md",
+          "score": 0.6689,
+          "heading_path": [
+            "Data Retention",
+            "Customer data"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "retention-after-closure",
+      "question": "If a customer closes their account, how long until their data is gone?",
+      "answerable": true,
+      "scores": {
+        "query_id": "retention-after-closure",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/data-retention.md",
+          "score": 0.8359,
+          "heading_path": [
+            "Data Retention",
+            "Customer data"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/billing.md",
+          "score": 0.7385,
+          "heading_path": [
+            "Billing and Refunds",
+            "Failed payments"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "priority-response-target",
+      "question": "What response time do Priority customers get?",
+      "answerable": true,
+      "scores": {
+        "query_id": "priority-response-target",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/support.md",
+          "score": 0.8269,
+          "heading_path": [
+            "Support Policy",
+            "Response targets"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/billing.md",
+          "score": 0.6365,
+          "heading_path": [
+            "Billing and Refunds",
+            "Refund window"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "escalation-criteria",
+      "question": "When does support hand a ticket to engineering?",
+      "answerable": true,
+      "scores": {
+        "query_id": "escalation-criteria",
+        "recall_at_k": 1.0,
+        "precision_at_k": 0.5,
+        "reciprocal_rank": 0.5,
+        "ndcg_at_k": 0.6309297535714575,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/support.md",
+          "score": 0.7272,
+          "heading_path": [
+            "Support Policy",
+            "Response targets"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/support.md",
+          "score": 0.669,
+          "heading_path": [
+            "Support Policy",
+            "Escalation"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "downgrade-and-closure-retention",
+      "question": "How does data retention differ between an account that was downgraded for non-payment and one that was closed?",
+      "answerable": true,
+      "scores": {
+        "query_id": "downgrade-and-closure-retention",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 2,
+        "total_relevant": 2,
+        "retrieved": 2
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/data-retention.md",
+          "score": 0.7911,
+          "heading_path": [
+            "Data Retention",
+            "Customer data"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/billing.md",
+          "score": 0.7889,
+          "heading_path": [
+            "Billing and Refunds",
+            "Failed payments"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "unanswerable-vacation",
+      "question": "How many vacation days do employees get?",
+      "answerable": false,
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 0.6147,
+          "heading_path": [
+            "Billing and Refunds",
+            "Annual plans"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "engineering/data-retention.md",
+          "score": 0.6101,
+          "heading_path": [
+            "Data Retention",
+            "Logs"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "unanswerable-pricing",
+      "question": "How much does the Enterprise plan cost per seat?",
+      "answerable": false,
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/support.md",
+          "score": 0.5688,
+          "heading_path": [
+            "Support Policy",
+            "Response targets"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/billing.md",
+          "score": 0.5421,
+          "heading_path": [
+            "Billing and Refunds",
+            "Annual plans"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "unanswerable-sso",
+      "question": "Do we support SAML single sign-on?",
+      "answerable": false,
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/authentication.md",
+          "score": 0.6393,
+          "heading_path": [
+            "Authentication",
+            "Service accounts"
+          ]
+        },
+        {
+          "rank": 1,
+          "document": "policies/support.md",
+          "score": 0.6172,
+          "heading_path": [
+            "Support Policy",
+            "Response targets"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    }
+  ]
+}
