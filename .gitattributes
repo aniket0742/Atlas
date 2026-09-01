@@ -1,0 +1,15 @@
+# Normalise line endings.
+#
+# Without this, Windows checkouts store CRLF and Linux/macOS checkouts store LF,
+# so the same file shows as entirely modified depending on who cloned it. Git
+# now stores LF in the repository and converts on checkout per platform.
+#
+# The API runs in a Linux container, so LF in the repository is also what the
+# image gets, which keeps shell scripts and entrypoints working.
+* text=auto eol=lf
+
+# Binary files must never be converted.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.onnx binary
