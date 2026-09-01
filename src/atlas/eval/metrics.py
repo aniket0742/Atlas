@@ -61,15 +61,22 @@ def reciprocal_rank(relevant_positions: list[int]) -> float:
     return 1.0 / (min(relevant_positions) + 1)
 
 
-def ndcg_at_k(relevant_positions: list[int], total_labels: int, k: int) -> float:
+def ndcg_at_k(label_positions: list[int], total_labels: int, k: int) -> float:
     """Binary-gain nDCG with the standard log2(rank+1) discount.
 
-    The ideal ranking places min(total_labels, k) relevant items at the top,
-    so IDCG is computed from the number of labels rather than from the number
-    of relevant items actually retrieved -- otherwise a run that retrieves one
-    of three relevant items at rank 1 would score a perfect 1.0.
+    `label_positions` must hold **one position per satisfied label** -- the
+    earliest rank at which that label was satisfied -- not every rank holding a
+    relevant chunk.
+
+    That distinction is not cosmetic. Chunks overlap, so several chunks can carry
+    the same fact and satisfy the same label. Summing gain for each of them makes
+    DCG exceed IDCG and produces nDCG above 1.0, which is not a valid score. This
+    was observed in the first baseline run (nDCG 1.0164) before the fix.
+
+    IDCG is computed from min(total_labels, k), so retrieving one of three
+    relevant items at rank 1 correctly scores below 1.0 rather than perfect.
     """
-    dcg = sum(1.0 / math.log2(p + 2) for p in relevant_positions if p < k)
+    dcg = sum(1.0 / math.log2(p + 2) for p in label_positions if p < k)
     ideal_hits = min(total_labels, k)
     idcg = sum(1.0 / math.log2(i + 2) for i in range(ideal_hits))
     if idcg == 0:
@@ -80,17 +87,29 @@ def ndcg_at_k(relevant_positions: list[int], total_labels: int, k: int) -> float
 def score_query(
     query_id: str,
     relevant_positions: list[int],
+    label_positions: list[int],
     matched_labels: int,
     total_labels: int,
     retrieved: int,
     k: int,
 ) -> QueryScores:
+    """Score one query.
+
+    Two position lists, deliberately:
+
+    * `relevant_positions` -- every rank holding a chunk that satisfies some
+      label. Precision is about the retrieved list, so it counts all of them,
+      and MRR only needs the first.
+    * `label_positions` -- the earliest rank satisfying each distinct label.
+      nDCG needs this so gain is counted once per label, matching how recall is
+      defined. Using the former would let nDCG exceed 1.0.
+    """
     return QueryScores(
         query_id=query_id,
         recall_at_k=recall_at_k(matched_labels, total_labels),
         precision_at_k=precision_at_k(relevant_positions, k),
         reciprocal_rank=reciprocal_rank(relevant_positions),
-        ndcg_at_k=ndcg_at_k(relevant_positions, total_labels, k),
+        ndcg_at_k=ndcg_at_k(label_positions, total_labels, k),
         matched=matched_labels,
         total_relevant=total_labels,
         retrieved=retrieved,

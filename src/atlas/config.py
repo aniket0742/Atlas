@@ -46,7 +46,9 @@ class Settings(BaseSettings):
 
     # --- Retrieval --------------------------------------------------------
     retrieval_top_k: int = 8
-    min_similarity: float = 0.30
+    # Calibrated in Phase 1 experiment E2, not guessed. See ADR-0013 and
+    # scripts/calibrate_floor.py.
+    min_similarity: float = 0.60
 
     # --- API --------------------------------------------------------------
     # Phase 1 has no auth. Every request is attributed to this tenant so that

@@ -117,12 +117,15 @@ class EvalRunner:
         scores: dict[str, Any] | None = None
         if query.answerable:
             relevant_positions: list[int] = []
-            matched_labels: set[int] = set()
+            # Earliest rank at which each distinct label was satisfied. Chunks
+            # overlap, so one label can be satisfied by several chunks; nDCG must
+            # count its gain once. See metrics.ndcg_at_k.
+            first_position_for_label: dict[int, int] = {}
             for position, chunk in enumerate(ranked):
                 hit = False
                 for label_index, gold in enumerate(query.labels):
                     if gold.matches(chunk.document_external_id, chunk.text):
-                        matched_labels.add(label_index)
+                        first_position_for_label.setdefault(label_index, position)
                         hit = True
                 if hit:
                     relevant_positions.append(position)
@@ -131,7 +134,8 @@ class EvalRunner:
                 metrics.score_query(
                     query_id=query.id,
                     relevant_positions=relevant_positions,
-                    matched_labels=len(matched_labels),
+                    label_positions=sorted(first_position_for_label.values()),
+                    matched_labels=len(first_position_for_label),
                     total_labels=len(query.labels),
                     retrieved=len(ranked),
                     k=top_k,

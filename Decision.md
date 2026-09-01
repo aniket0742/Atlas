@@ -457,35 +457,84 @@ and a job id.
 
 ---
 
-## ADR-0013: The similarity floor is a policy knob and is not yet calibrated
+## ADR-0013: The similarity floor, calibrated at 0.60
 
-**Status:** provisional (Phase 1)
+**Status:** accepted (Phase 1) — was `provisional`; calibrated by experiment E2
 
 **Problem.** Retrieval always returns its top-k. Without a floor, a question with
 no answer in the corpus still yields k confident-looking chunks and the model is
 asked to answer from irrelevant evidence.
 
-**Decision.** A configurable cosine-similarity floor below which a chunk is not
-treated as evidence at all. Below it, the system refuses without calling the
-model.
+**Decision.** A cosine-similarity floor of **0.60**. Below it, Atlas refuses
+without calling the model at all.
 
-**Honest status.** The default (`0.30`) is **not calibrated and is probably too
-low to filter anything**. An early measurement with `bge-small-en-v1.5` on this
-machine showed an obviously relevant passage at cosine 0.74, a topically-adjacent
-one at 0.71, and a completely unrelated passage at 0.42 — this model compresses
-similarity into a narrow high band, so a 0.30 floor would admit everything.
+**How the number was chosen.** The floor acts on retrieval scores, so its effect
+is computable with no LLM calls. `scripts/calibrate_floor.py` retrieves every
+eval query once and sweeps candidate thresholds, measuring three things: how many
+unanswerable questions get refused before a model call, how many answerable
+questions lose *all* their evidence, and how many lose their *relevant* evidence.
 
-It is deliberately left at a documented-wrong value rather than guessed at a
-better one, because the eval set contains unanswerable questions specifically to
-calibrate it. The threshold will be set from that sweep, and the value plus the
-sweep will be recorded here.
+Measured on the 19-query smoke set with `bge-small-en-v1.5`:
 
-**Trade-offs.** Too low: fabrication risk on unanswerable questions. Too high:
-correct answers refused. The eval harness reports both error directions, which is
-what makes this tunable rather than a matter of taste.
+| | range |
+|---|---|
+| Answerable — score of best **relevant** chunk | 0.669 – 0.879 |
+| Unanswerable — score of best chunk overall | 0.569 – 0.639 |
+
+The distributions do not overlap. A floor anywhere in 0.64–0.66 would refuse all
+three unanswerable questions with zero false refusals.
+
+**Why 0.60 and not 0.65.** The separating gap is 0.03 wide and rests on **three**
+unanswerable queries. Placing the threshold inside that gap would be fitting a
+parameter to three data points, and it would not survive contact with a real
+corpus. 0.60 sits 0.069 below the weakest genuine answer — enough margin that
+normal variation does not start refusing real questions — and still eliminates
+one unanswerable query before any token is spent.
+
+This is deliberately a *conservative* setting, because the floor is not the only
+control. It is a cheap pre-filter; the model's own `sufficient_evidence`
+judgement plus citation validation (ADR-0010) handle the rest. Verified live: the
+SAML question scores 0.639, passes the floor, and is correctly refused by the
+model anyway.
+
+**Trade-offs.** At 0.60 only one of three unanswerable questions is caught before
+the model call, so the other two cost tokens. Raising the floor would save those
+tokens and increase the risk of refusing real questions. That trade is now
+measurable in both directions rather than a matter of taste.
 
 **Note.** Retrieval metrics in the eval harness are computed *before* the floor is
-applied. The floor is an answering policy; mixing it into retrieval scoring would
-make a threshold change look like a retrieval regression.
+applied. The floor is an answering policy; folding it into retrieval scoring
+would make a threshold change look like a retrieval regression.
 
-**Reconsider.** End of Phase 1, with the calibration sweep.
+**Reconsider if.** The eval set grows (the current separation is very likely an
+artefact of a small synthetic corpus — on real data these distributions should be
+expected to overlap), the embedding model changes (absolute cosine values are not
+comparable across models, so this number is meaningless for any other model), or
+the measured false-refusal rate rises.
+
+---
+
+## ADR-0014: nDCG counts gain once per label
+
+**Status:** accepted (Phase 1)
+
+**Problem.** The first baseline run reported **nDCG@8 = 1.0164**. nDCG is
+normalised and cannot exceed 1.0, so the metric was wrong.
+
+**Cause.** DCG summed gain at every rank holding a relevant chunk, while IDCG was
+computed from the number of *labels*. Because chunks overlap, several chunks can
+carry the same fact and satisfy the same label, so DCG could exceed IDCG.
+
+**Decision.** nDCG takes one position per distinct label — the earliest rank at
+which that label was satisfied. Precision still counts every relevant chunk in
+the top k, because precision is a statement about the retrieved list rather than
+about label coverage. MRR is unaffected.
+
+**Why it matters beyond the arithmetic.** A score above 1.0 is visibly wrong and
+was caught immediately. The same bug at a smaller magnitude would have silently
+inflated every retrieval number, and Phase 2 would have compared hybrid retrieval
+against a corrupted baseline. That is the argument for building the harness in
+Phase 1 and *running* it, rather than trusting it because the code looks right.
+
+**Guard.** A regression test asserts nDCG stays within [0, 1] for inputs where
+several chunks share a label.

@@ -3,10 +3,11 @@
 A retrieval platform that answers questions about an organisation's own
 documents, with citations, and refuses when the answer is not in the corpus.
 
-**Status: Phase 1 (basic end-to-end RAG) — code complete, pending first run
-against a live database.** Everything below marked *measured* has been measured;
-everything else is described as implemented or planned. There are no benchmark
-numbers in this README yet because no benchmark has been run yet.
+**Status: Phase 1 complete and verified against a live database.** Experiments
+E1 (dense retrieval baseline) and E2 (similarity-floor calibration) have been run
+and are recorded in [`docs/evaluation.md`](docs/evaluation.md). Every number
+below was measured on this machine; where a number is ceiling-limited by the size
+of the sample corpus, that is stated rather than glossed over.
 
 ---
 
@@ -189,9 +190,22 @@ confidence interval, plus (with `--with-answers`) refusal correctness in both
 directions, citation coverage, unverified-quote count, latency percentiles and
 token totals.
 
-The shipped dataset has 19 queries. That is a smoke set for catching
-regressions, not a benchmark, and the confidence intervals will be wide enough to
-say so. Overlapping intervals mean no measured difference.
+The shipped dataset has 19 queries (16 answerable, 3 unanswerable). That is a
+smoke set for catching regressions, not a benchmark, and the confidence intervals
+are wide enough to say so. Overlapping intervals mean no measured difference.
+
+**Measured baseline** (dense retrieval, `bge-small-en-v1.5`, 95% bootstrap CIs):
+
+| k | Recall@k | MRR | nDCG@k |
+|---|---|---|---|
+| 1 | 0.906 [0.78–1.00] | 0.938 [0.81–1.00] | 0.938 [0.81–1.00] |
+| 2 | 1.000 [1.00–1.00] | 0.969 [0.91–1.00] | 0.977 [0.93–1.00] |
+
+**Similarity floor**, calibrated by `scripts/calibrate_floor.py`: answerable
+questions score 0.669–0.879 on their relevant chunk; unanswerable questions top
+out at 0.639. The floor is set to **0.60** — deliberately below the apparently
+optimal 0.64–0.66, because a 0.03 gap measured on three queries is not a
+parameter worth fitting. See [ADR-0013](Decision.md).
 
 ## Testing
 
@@ -212,10 +226,6 @@ Current, and honest:
 - **Ingestion is synchronous.** A large PDF blocks its own request. No retry —
   a failed document is marked `failed` with its error and must be resubmitted.
   ([ADR-0012](Decision.md))
-- **The similarity floor is not calibrated.** The default is documented as
-  probably too low to filter anything; it is deliberately left at a known-wrong
-  value until the calibration sweep, rather than guessed.
-  ([ADR-0013](Decision.md))
 - **Chunking is unvalidated.** Structure-aware chunking is implemented and its
   invariants are tested, but whether it beats fixed-size chunking on this corpus
   has not been measured. Marked `provisional`. ([ADR-0009](Decision.md))
@@ -223,6 +233,10 @@ Current, and honest:
   The tenant plumbing is complete; the identity layer is Phase 5.
 - **Dense retrieval only.** No lexical search, so exact-match queries (error
   codes, identifiers) are weak. Phase 2.
+- **The eval corpus is too small to discriminate.** 5 documents / 17 chunks means
+  Recall@k saturates at k=2, so Phase 2 comparisons must be made at k=1 and on a
+  larger corpus. Reporting "hybrid retrieval keeps Recall@8 at 1.0" would be
+  meaningless — see [`docs/evaluation.md`](docs/evaluation.md).
 - **Embedding throughput is a concern.** *Measured* at roughly 350 ms per
   ~250-token chunk on one laptop CPU with the quantised ONNX build. Fine
   interactively, slow for bulk ingestion. Phase 6 target.
@@ -237,7 +251,7 @@ Current, and honest:
 
 | Phase | Scope | State |
 |---|---|---|
-| 1 | End-to-end RAG, citations, tenancy in schema, **eval harness** | code complete |
+| 1 | End-to-end RAG, citations, tenancy in schema, **eval harness** | complete, E1+E2 run |
 | 2 | BM25 + hybrid fusion + reranking, measured against Phase 1 baseline | next |
 | 3 | Postgres job queue, workers, retries, DLQ, incremental re-crawl | planned |
 | 4 | Tool use: knowledge base, GitHub diffs, fixed metadata queries | planned |

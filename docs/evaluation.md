@@ -149,6 +149,84 @@ Note that fastembed downloads a **quantised** ONNX build of the embedding model.
 Any published number should name that, since quantisation can shift retrieval
 quality slightly relative to the original FP32 weights.
 
+## Results so far
+
+Run on the 19-query smoke set, `bge-small-en-v1.5`, structure-aware chunking at
+320/64 tokens. Reports in `eval/results/`.
+
+### E1 — dense retrieval baseline
+
+| k | Recall@k | MRR | nDCG@k | P@k |
+|---|---|---|---|---|
+| 1 | 0.906 [0.78–1.00] | 0.938 [0.81–1.00] | 0.938 [0.81–1.00] | 0.938 |
+| 2 | 1.000 [1.00–1.00] | 0.969 [0.91–1.00] | 0.977 [0.93–1.00] | 0.562 |
+| 3 | 1.000 [1.00–1.00] | 0.969 [0.91–1.00] | 0.977 [0.93–1.00] | 0.375 |
+| 5 | 1.000 [1.00–1.00] | 0.969 [0.91–1.00] | 0.977 [0.93–1.00] | 0.225 |
+| 8 | 1.000 [1.00–1.00] | 0.969 [0.91–1.00] | 0.977 [0.93–1.00] | 0.141 |
+
+Brackets are 95% bootstrap confidence intervals over 16 answerable queries.
+
+**Reading this honestly.** Dense retrieval puts a relevant chunk at rank 1 for
+about 91% of queries, and finds everything by rank 2. That sounds excellent and
+mostly is not informative: the corpus is 5 documents and 17 chunks, so k=8
+retrieves nearly half the index. **Recall saturates at k=2 and stays pinned at
+1.000 with zero variance**, which means Recall@5 and Recall@8 cannot distinguish
+between any two retrieval strategies on this corpus.
+
+Consequence for Phase 2: **hybrid retrieval and reranking must be compared at
+k=1, and on a larger corpus.** Reporting "hybrid keeps Recall@8 at 1.0" would be
+meaningless — dense already achieves it and so would picking chunks at random
+often enough. Precision@k falling as k grows is likewise an artefact of a
+single-label dataset over a tiny index, not a quality signal.
+
+The one query whose first relevant chunk is not at rank 1 is what drags MRR to
+0.969; that single query is the only headroom this dataset currently offers.
+
+### E2 — similarity floor calibration
+
+`scripts/calibrate_floor.py`. No LLM calls: the floor acts on retrieval scores,
+so its effect is pure arithmetic over a single retrieval pass.
+
+| | min | max |
+|---|---|---|
+| Answerable — best **relevant** chunk | 0.669 | 0.879 |
+| Unanswerable — best chunk overall | 0.569 | 0.639 |
+
+The distributions are separable, with a gap from 0.639 to 0.669.
+
+| floor | unanswerable auto-refused (of 3) | answerable wrongly refused (of 16) | answerable losing relevant evidence |
+|---|---|---|---|
+| 0.30 (old default) | 0 | 0 | 0 |
+| 0.58 | 1 | 0 | 0 |
+| 0.60 (**chosen**) | 1 | 0 | 0 |
+| 0.62 | 2 | 0 | 0 |
+| 0.64–0.66 | 3 | 0 | 0 |
+| 0.68+ | 3 | 0 | 1 |
+
+**0.60 was chosen over the apparently-optimal 0.64–0.66.** The separating gap is
+0.03 wide and rests on three unanswerable queries; putting the threshold inside
+it fits a parameter to three data points and should not be expected to survive a
+real corpus. 0.60 keeps 0.069 of margin below the weakest genuine answer while
+still eliminating one unanswerable query before any token is spent. The remaining
+two are caught by the model's `sufficient_evidence` judgement, verified live.
+
+This also confirms the old default of 0.30 filtered nothing whatsoever, exactly
+as ADR-0013 predicted it would.
+
+### A bug this found
+
+The first E1 run reported **nDCG@8 = 1.0164** — impossible for a normalised
+metric. DCG was summing gain at every rank holding a relevant chunk while IDCG
+counted labels, and overlapping chunks let several chunks satisfy one label. Now
+fixed (ADR-0014) with a regression test.
+
+Worth stating plainly: this bug was in the measurement code, and a smaller
+version of it would have silently inflated every number without ever exceeding
+1.0. Phase 2 would then have compared hybrid retrieval against a corrupted
+baseline and drawn a confident wrong conclusion. This is the argument for
+building the harness early and *running* it, rather than trusting it because the
+code reads correctly.
+
 ## Planned experiments
 
 Recorded here in advance so results are not selected after the fact.

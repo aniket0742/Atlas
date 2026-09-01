@@ -84,6 +84,37 @@ def test_ndcg_is_perfect_only_when_all_labels_are_at_the_top():
     assert metrics.ndcg_at_k([], 2, 10) == 0.0
 
 
+def test_ndcg_never_exceeds_one_when_several_chunks_share_a_label():
+    """Regression: the first baseline run reported nDCG 1.0164.
+
+    Overlapping chunks mean one label can be satisfied at several ranks. nDCG
+    takes one position per label, so passing three positions for a single label
+    is a caller error -- but the metric must stay bounded for any input it is
+    given, because an unbounded 'normalised' score is silently meaningless.
+    """
+    for total_labels in (1, 2, 3):
+        for positions in ([0], [0, 1], [0, 1, 2], [0, 1, 2, 3, 4]):
+            score = metrics.ndcg_at_k(positions[:total_labels], total_labels, 10)
+            assert 0.0 <= score <= 1.0, (positions, total_labels, score)
+
+
+def test_score_query_uses_label_positions_for_ndcg_not_every_hit():
+    """Three chunks satisfying one label is still a perfect ranking, not 2x."""
+    scores = metrics.score_query(
+        query_id="q",
+        relevant_positions=[0, 1, 2],   # three chunks matched
+        label_positions=[0],            # but they all satisfy the same label
+        matched_labels=1,
+        total_labels=1,
+        retrieved=8,
+        k=8,
+    )
+    assert scores.ndcg_at_k == pytest.approx(1.0)
+    assert scores.recall_at_k == pytest.approx(1.0)
+    # Precision legitimately counts all three retrieved relevant chunks.
+    assert scores.precision_at_k == pytest.approx(3 / 8)
+
+
 def test_ndcg_rewards_higher_ranks():
     assert metrics.ndcg_at_k([0], 1, 10) > metrics.ndcg_at_k([5], 1, 10)
 
