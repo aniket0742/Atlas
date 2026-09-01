@@ -1,0 +1,270 @@
+# Atlas
+
+A retrieval platform that answers questions about an organisation's own
+documents, with citations, and refuses when the answer is not in the corpus.
+
+**Status: Phase 1 (basic end-to-end RAG) — code complete, pending first run
+against a live database.** Everything below marked *measured* has been measured;
+everything else is described as implemented or planned. There are no benchmark
+numbers in this README yet because no benchmark has been run yet.
+
+---
+
+## The problem
+
+An organisation's knowledge is spread across policy documents, engineering docs,
+wikis and repositories. People ask questions whose answers exist somewhere in
+that material, and finding them is a search problem that keyword search handles
+badly and that a general-purpose chatbot handles worse — because a chatbot with
+no access to the corpus will answer anyway.
+
+The failure mode that matters is not "the system could not find the answer". It
+is "the system produced a confident, plausible, wrong answer, and nothing in the
+response indicated which parts were grounded." Atlas is built around preventing
+that specific outcome.
+
+## What makes this different from a "chat with your PDFs" demo
+
+Three things are enforced in code rather than requested in a prompt:
+
+- **A citation cannot name a source that was not retrieved.** Evidence ids are
+  server-generated per request; the model's cited ids are validated against that
+  exact set, and anything else is discarded.
+- **A quote is checked against the chunk it cites.** Verbatim match required;
+  mismatches are surfaced and counted, not silently accepted.
+- **An answer with no resolvable citation is converted into a refusal.** An
+  uncited answer from a retrieval system is indistinguishable from a guess.
+
+And one thing is enforced in the schema: **`tenant_id` is on every table and in
+every query from the first migration**, with document ids derived from the tenant
+so two tenants uploading identical files get different ids by construction — even
+though Phase 1 has a single tenant and no authentication. Cross-tenant leakage is
+the worst bug this system could have, and retrofitting isolation is how it
+happens.
+
+Reasoning for these and every other significant choice is in
+[`Decision.md`](Decision.md).
+
+## Architecture
+
+```text
+             ┌──────────────┐
+  documents  │ Ingestion    │   parse → normalise → chunk → embed → index
+  ──────────▶│ pipeline     │   (synchronous in Phase 1; queued in Phase 3)
+             └──────┬───────┘
+                    │
+             ┌──────▼─────────────────────────────────┐
+             │ PostgreSQL 16 + pgvector               │
+             │                                        │
+             │  tenants / sources                     │
+             │  documents  (content, hash, version)   │
+             │  chunks     (text, char offsets)       │
+             │  chunk_embeddings (per model, HNSW)    │
+             └──────┬─────────────────────────────────┘
+                    │
+             ┌──────▼───────┐
+  question   │ Retrieval    │   dense (Phase 1)
+  ──────────▶│              │   + BM25 + reranking (Phase 2)
+             └──────┬───────┘
+                    │ evidence, above a similarity floor
+             ┌──────▼───────┐
+             │ Answering    │   structured output, then:
+             │              │     resolve citations
+             │              │     verify quotes
+             │              │     downgrade uncited answers
+             └──────┬───────┘
+                    │
+              answer + citations (or an explicit refusal)
+```
+
+One process, one database. Redis is in `docker-compose.yml` for Phase 3 and 6
+but is not used yet. There is no message broker — see
+[ADR-0002](Decision.md#adr-0002-no-kafka-a-queue-is-deferred-and-will-probably-be-postgres)
+for why Kafka was considered and rejected.
+
+## Technology
+
+| Component | Choice | Why (short form) |
+|---|---|---|
+| API | FastAPI, Python 3.11 | async, typed request/response models |
+| Database | PostgreSQL 16 + pgvector | one transaction covers metadata *and* vectors ([ADR-0001](Decision.md)) |
+| DB driver | psycopg 3, hand-written SQL | the interesting queries are pgvector operators ([ADR-0005](Decision.md)) |
+| Migrations | numbered `.sql` + checksum | index DDL that autogenerate cannot model ([ADR-0006](Decision.md)) |
+| Embeddings | `BAAI/bge-small-en-v1.5` via fastembed (local, CPU, ONNX) | free re-indexing makes retrieval experiments affordable ([ADR-0007](Decision.md)) |
+| Generation | Google Gemini free tier, behind a `Protocol` | no paid dependency; swappable ([ADR-0008](Decision.md)) |
+| Tests | pytest | 72 unit tests run with no database and no API key |
+
+## Running it locally
+
+### Prerequisites
+
+- Python 3.11+
+- Docker Desktop (for Postgres with pgvector)
+- A Gemini API key from <https://aistudio.google.com/apikey> — free tier is
+  sufficient. Not needed for the test suite.
+
+### Setup
+
+```bash
+python -m venv .venv
+.venv/Scripts/activate          # Windows;  source .venv/bin/activate elsewhere
+pip install -e ".[dev]"
+
+cp .env.example .env            # then put your GEMINI_API_KEY in it
+
+docker compose up -d            # Postgres on 5432, Redis on 6379
+atlas migrate                   # apply schema
+```
+
+The first embedding call downloads ~67MB of ONNX weights into `.models/`.
+
+### Confirm your model
+
+Free-tier model availability changes and is not reliably documented per model, so
+Atlas does not hard-code a claim about it:
+
+```bash
+atlas models                    # lists what your key can actually reach
+```
+
+Set `ATLAS_LLM_MODEL` in `.env` to one of those.
+
+### Index and ask
+
+```bash
+atlas ingest eval/corpus --source handbook
+atlas stats
+
+atlas query "How long do customers have to request a refund?"
+atlas query "How many vacation days do employees get?"   # should refuse
+```
+
+Or run the HTTP API:
+
+```bash
+atlas serve                     # http://127.0.0.1:8000/docs
+```
+
+## API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/health` | liveness, database reachability, active models |
+| `GET` | `/v1/stats` | document / chunk / embedding counts for the tenant |
+| `POST` | `/v1/documents` | upload and index a document (multipart) |
+| `GET` | `/v1/documents` | list indexed documents |
+| `GET` | `/v1/documents/{id}` | document detail, including failure reason |
+| `GET` | `/v1/sources` | configured sources and their document counts |
+| `POST` | `/v1/query` | ask a question; returns answer, citations, usage, timings |
+
+`POST /v1/query` returns per-stage timings and token usage on every response, so
+the numbers Phase 6 (observability) and Phase 8 (evaluation) need are available
+from the start rather than requiring an API change later.
+
+```bash
+curl -s localhost:8000/v1/query -H 'content-type: application/json' \
+  -d '{"question":"What happens after a chargeback?","include_evidence":true}'
+```
+
+Error codes are meaningful: `415` unsupported document type, `422` document could
+not be parsed, `502` the model provider failed, `504` the model provider timed
+out. Atlas being healthy while its upstream is not is a distinct condition.
+
+## Evaluation
+
+Retrieval quality is measured, not asserted. The methodology, the label format
+and its rationale are in [`docs/evaluation.md`](docs/evaluation.md).
+
+```bash
+atlas eval eval/datasets/smoke.jsonl               # retrieval only; free, no LLM
+atlas eval eval/datasets/smoke.jsonl --with-answers  # adds refusal + citation metrics
+```
+
+Reports are JSON, written to `eval/results/`, and each one records the full
+configuration that produced it — embedding model, chunk parameters, `k`,
+similarity floor. A retrieval number without those is not comparable to anything.
+
+Metrics reported: Recall@k, Precision@k, MRR, nDCG@k, each with a 95% bootstrap
+confidence interval, plus (with `--with-answers`) refusal correctness in both
+directions, citation coverage, unverified-quote count, latency percentiles and
+token totals.
+
+The shipped dataset has 19 queries. That is a smoke set for catching
+regressions, not a benchmark, and the confidence intervals will be wide enough to
+say so. Overlapping intervals mean no measured difference.
+
+## Testing
+
+```bash
+pytest                          # 72 unit tests, no database or API key needed
+docker compose up -d && pytest -m integration   # 12 more against real Postgres
+```
+
+The integration tests cover the properties that are hard to reason about without
+a database: idempotent re-ingestion, version replacement without orphaned chunks,
+concurrent ingestion of the same document, tenant isolation, and refusal on an
+empty corpus.
+
+## Known limitations
+
+Current, and honest:
+
+- **Ingestion is synchronous.** A large PDF blocks its own request. No retry —
+  a failed document is marked `failed` with its error and must be resubmitted.
+  ([ADR-0012](Decision.md))
+- **The similarity floor is not calibrated.** The default is documented as
+  probably too low to filter anything; it is deliberately left at a known-wrong
+  value until the calibration sweep, rather than guessed.
+  ([ADR-0013](Decision.md))
+- **Chunking is unvalidated.** Structure-aware chunking is implemented and its
+  invariants are tested, but whether it beats fixed-size chunking on this corpus
+  has not been measured. Marked `provisional`. ([ADR-0009](Decision.md))
+- **No authentication.** Every request is attributed to one configured tenant.
+  The tenant plumbing is complete; the identity layer is Phase 5.
+- **Dense retrieval only.** No lexical search, so exact-match queries (error
+  codes, identifiers) are weak. Phase 2.
+- **Embedding throughput is a concern.** *Measured* at roughly 350 ms per
+  ~250-token chunk on one laptop CPU with the quantised ONNX build. Fine
+  interactively, slow for bulk ingestion. Phase 6 target.
+- **No OCR.** Scanned PDFs fail ingestion with an explicit message rather than
+  indexing as empty.
+- **Prompt injection is contained, not solved.** Retrieved text cannot mint a
+  citation and, in Phase 1, cannot trigger an action because there are no tools.
+  A document that states something false will be faithfully reported as stating
+  it. ([ADR-0010](Decision.md))
+
+## Roadmap
+
+| Phase | Scope | State |
+|---|---|---|
+| 1 | End-to-end RAG, citations, tenancy in schema, **eval harness** | code complete |
+| 2 | BM25 + hybrid fusion + reranking, measured against Phase 1 baseline | next |
+| 3 | Postgres job queue, workers, retries, DLQ, incremental re-crawl | planned |
+| 4 | Tool use: knowledge base, GitHub diffs, fixed metadata queries | planned |
+| 5 | AuthN/AuthZ, RBAC, rate limiting, filtered-recall fix for HNSW | planned |
+| 6 | OpenTelemetry, Prometheus, caching, embedding throughput | planned |
+| 7 | Deployment, load testing | planned |
+| 8 | Expanded eval, failure injection, write-up | planned |
+
+Two deliberate departures from the original plan, both argued in `Decision.md`:
+the eval harness ships in Phase 1 rather than Phase 8 (otherwise Phase 2's
+"hybrid retrieval improved recall" claim has no baseline to compare against), and
+tenancy lands in the schema in Phase 1 rather than Phase 5.
+
+## Project layout
+
+```text
+src/atlas/
+  api/          FastAPI app, request/response schemas
+  answer/       prompt construction, citation validation, refusal policy
+  core/         domain models, deterministic id derivation
+  db/           connection pool, migrations, all SQL
+  eval/         dataset format, metrics, runner
+  ingest/       parsers, normalisation, chunking, pipeline
+  providers/    embedding + LLM protocols, Gemini, fastembed, offline fakes
+  cli.py        migrate / ingest / query / eval / models / serve
+migrations/     numbered SQL
+eval/corpus/    sample knowledge base
+eval/datasets/  labelled evaluation queries
+tests/          unit tests (no infra) + integration tests (marked)
+```

@@ -1,0 +1,194 @@
+"""Identifiers, metrics and eval-dataset validation."""
+
+from __future__ import annotations
+
+import json
+import uuid
+
+import pytest
+
+from atlas.core import ids
+from atlas.eval import metrics
+from atlas.eval.dataset import Label, load
+
+# ---------------------------------------------------------------------------
+# Deterministic ids -- the basis of idempotent ingestion
+# ---------------------------------------------------------------------------
+
+
+def test_ids_are_stable_across_calls():
+    tenant = ids.tenant_id("acme")
+    source = ids.source_id(tenant, "handbook")
+    assert ids.tenant_id("acme") == tenant
+    assert ids.source_id(tenant, "handbook") == source
+    assert ids.document_id(tenant, source, "a.md") == ids.document_id(tenant, source, "a.md")
+
+
+def test_document_identity_excludes_content():
+    """A changed document is the same document at a new version."""
+    tenant = ids.tenant_id("acme")
+    source = ids.source_id(tenant, "handbook")
+    assert ids.document_id(tenant, source, "a.md") == ids.document_id(tenant, source, "a.md")
+
+
+def test_different_tenants_never_share_a_document_id():
+    """The property that makes cross-tenant collision impossible by construction."""
+    a, b = ids.tenant_id("acme"), ids.tenant_id("globex")
+    source_a, source_b = ids.source_id(a, "kb"), ids.source_id(b, "kb")
+    assert a != b
+    assert source_a != source_b
+    assert ids.document_id(a, source_a, "same.md") != ids.document_id(b, source_b, "same.md")
+
+
+def test_chunk_id_changes_with_version():
+    doc = uuid.uuid4()
+    assert ids.chunk_id(doc, 1, 0) != ids.chunk_id(doc, 2, 0)
+    assert ids.chunk_id(doc, 1, 0) != ids.chunk_id(doc, 1, 1)
+
+
+def test_content_hash_detects_any_change():
+    assert ids.content_hash(b"hello") == ids.content_hash(b"hello")
+    assert ids.content_hash(b"hello") != ids.content_hash(b"hello ")
+
+
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
+
+
+def test_recall_counts_labels_not_chunks():
+    """Several chunks can satisfy one label; recall must not double-count."""
+    assert metrics.recall_at_k(1, 2) == 0.5
+    assert metrics.recall_at_k(2, 2) == 1.0
+    assert metrics.recall_at_k(0, 0) == 0.0
+
+
+def test_reciprocal_rank_is_one_based():
+    assert metrics.reciprocal_rank([0]) == 1.0
+    assert metrics.reciprocal_rank([1]) == 0.5
+    assert metrics.reciprocal_rank([3, 1]) == 0.5  # uses the best rank
+    assert metrics.reciprocal_rank([]) == 0.0
+
+
+def test_precision_only_counts_within_k():
+    assert metrics.precision_at_k([0, 1], 4) == 0.5
+    assert metrics.precision_at_k([0, 9], 4) == 0.25
+    assert metrics.precision_at_k([], 4) == 0.0
+
+
+def test_ndcg_is_perfect_only_when_all_labels_are_at_the_top():
+    assert metrics.ndcg_at_k([0], 1, 10) == pytest.approx(1.0)
+    assert metrics.ndcg_at_k([0, 1], 2, 10) == pytest.approx(1.0)
+    # One of two labels found at rank 1 must not score 1.0.
+    assert metrics.ndcg_at_k([0], 2, 10) < 1.0
+    assert metrics.ndcg_at_k([], 2, 10) == 0.0
+
+
+def test_ndcg_rewards_higher_ranks():
+    assert metrics.ndcg_at_k([0], 1, 10) > metrics.ndcg_at_k([5], 1, 10)
+
+
+def test_bootstrap_ci_brackets_the_mean_and_is_deterministic():
+    values = [0.2, 0.4, 0.6, 0.8, 1.0, 0.5, 0.3, 0.7]
+    low, high = metrics.bootstrap_ci(values)
+    assert low <= metrics.mean(values) <= high
+    assert metrics.bootstrap_ci(values) == (low, high)
+
+
+def test_bootstrap_ci_of_identical_values_has_zero_width():
+    low, high = metrics.bootstrap_ci([0.5] * 10)
+    assert low == high == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------------------
+# Eval dataset
+# ---------------------------------------------------------------------------
+
+
+def test_label_matching_requires_the_right_document():
+    label = Label(document="a.md", contains="30 days")
+    assert label.matches("a.md", "refunds within 30 days")
+    assert not label.matches("b.md", "refunds within 30 days")
+
+
+def test_label_matching_ignores_case_and_whitespace():
+    """Labels must survive re-chunking, which reflows whitespace."""
+    label = Label(document="a.md", contains="within 30 days")
+    assert label.matches("a.md", "refunds\nWITHIN   30\ndays of purchase")
+
+
+def test_label_without_a_snippet_matches_any_chunk_of_the_document():
+    assert Label(document="a.md").matches("a.md", "anything at all")
+
+
+def write(tmp_path, records):
+    path = tmp_path / "set.jsonl"
+    path.write_text("\n".join(json.dumps(r) for r in records), encoding="utf-8")
+    return path
+
+
+def test_loads_a_valid_dataset(tmp_path):
+    path = write(
+        tmp_path,
+        [
+            {"id": "a", "question": "q?", "labels": [{"document": "d.md", "contains": "x"}]},
+            {"id": "b", "question": "q2?", "answerable": False},
+        ],
+    )
+    queries = load(path)
+    assert [q.id for q in queries] == ["a", "b"]
+    assert queries[1].answerable is False
+
+
+def test_rejects_an_answerable_query_with_no_labels(tmp_path):
+    """The silent-zero-recall trap: an unlabelled query scores 0 forever."""
+    path = write(tmp_path, [{"id": "a", "question": "q?"}])
+    with pytest.raises(ValueError, match="marked answerable but has"):
+        load(path)
+
+
+def test_rejects_an_unanswerable_query_that_has_labels(tmp_path):
+    path = write(
+        tmp_path,
+        [{"id": "a", "question": "q?", "answerable": False, "labels": [{"document": "d.md"}]}],
+    )
+    with pytest.raises(ValueError, match="unanswerable"):
+        load(path)
+
+
+def test_rejects_duplicate_ids(tmp_path):
+    path = write(
+        tmp_path,
+        [
+            {"id": "a", "question": "q?", "labels": [{"document": "d.md"}]},
+            {"id": "a", "question": "q2?", "labels": [{"document": "d.md"}]},
+        ],
+    )
+    with pytest.raises(ValueError, match="duplicate"):
+        load(path)
+
+
+def test_comments_and_blank_lines_are_ignored(tmp_path):
+    path = tmp_path / "set.jsonl"
+    path.write_text(
+        '// a comment\n\n{"id": "a", "question": "q?", "labels": [{"document": "d.md"}]}\n',
+        encoding="utf-8",
+    )
+    assert len(load(path)) == 1
+
+
+def test_the_shipped_smoke_dataset_is_valid_and_its_labels_exist():
+    """Guards against a label whose snippet was edited out of the corpus."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    queries = load(root / "eval" / "datasets" / "smoke.jsonl")
+    assert len(queries) >= 15
+    assert any(not q.answerable for q in queries), "need unanswerable queries to score refusal"
+
+    for query in queries:
+        for label in query.labels:
+            text = (root / "eval" / "corpus" / label.document).read_text(encoding="utf-8")
+            assert label.matches(label.document, text), (
+                f"{query.id}: snippet {label.contains!r} is not in {label.document}"
+            )

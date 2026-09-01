@@ -1,0 +1,36 @@
+// Atlas smoke evaluation set, labelled against eval/corpus/.
+//
+// Deliberately small (19 queries: 16 answerable, 3 unanswerable) and honest
+// about it: a development smoke set for catching regressions, not a benchmark.
+// Numbers from it carry wide confidence intervals, and the runner prints them.
+//
+// Labels name a document by its external id (its path under the ingest root)
+// and optionally a snippet that must appear in the retrieved chunk. They are
+// NOT chunk ids -- see src/atlas/eval/dataset.py for why that matters.
+//
+// The set mixes four kinds of query on purpose:
+//   * direct lookup            -- the fact is stated in one place, verbatim
+//   * paraphrased lookup       -- the question shares no keywords with the source
+//   * multi-document           -- the answer needs two documents
+//   * unanswerable             -- the corpus does not contain the answer at all
+// Dense retrieval should do well on the first, is the interesting case for the
+// second, and the fourth exists to measure refusal rather than retrieval.
+{"id": "refund-window", "question": "How long do customers have to request a refund?", "answerable": true, "labels": [{"document": "policies/billing.md", "contains": "within 30 days"}], "notes": "direct lookup"}
+{"id": "refund-settle-time", "question": "How long does a refund take to appear on the customer's card?", "answerable": true, "labels": [{"document": "policies/billing.md", "contains": "5 to 10 business days"}], "notes": "direct lookup"}
+{"id": "annual-proration", "question": "If someone cancels an annual plan halfway through, what do they get back?", "answerable": true, "labels": [{"document": "policies/billing.md", "contains": "prorated"}], "notes": "paraphrased; question avoids the word 'refund policy'"}
+{"id": "failed-payment-grace", "question": "What happens to an account after a payment fails repeatedly?", "answerable": true, "labels": [{"document": "policies/billing.md", "contains": "grace period"}], "notes": "paraphrased lookup"}
+{"id": "chargeback-consequence", "question": "What happens if a customer disputes a charge with their bank instead of contacting us?", "answerable": true, "labels": [{"document": "policies/billing.md", "contains": "suspended immediately"}], "notes": "paraphrased; 'disputes with their bank' never appears in the source"}
+{"id": "access-token-lifetime", "question": "How long is an access token valid?", "answerable": true, "labels": [{"document": "engineering/authentication.md", "contains": "15 minutes"}], "notes": "direct lookup"}
+{"id": "refresh-token-reuse", "question": "What happens if an old refresh token is presented again?", "answerable": true, "labels": [{"document": "engineering/authentication.md", "contains": "revokes the entire token family"}], "notes": "direct lookup, security-relevant"}
+{"id": "revocation-delay", "question": "After we revoke a session, can the user still make API calls?", "answerable": true, "labels": [{"document": "engineering/authentication.md", "contains": "remains usable until it expires"}], "notes": "paraphrased; the answer is a caveat, not a headline"}
+{"id": "service-account-scope", "question": "Can a service account access more than one tenant?", "answerable": true, "labels": [{"document": "engineering/authentication.md", "contains": "cannot be granted cross-tenant"}], "notes": "yes/no question with a stated answer"}
+{"id": "rollback-after-migration", "question": "Why can't we just roll back a release that included a schema change?", "answerable": true, "labels": [{"document": "engineering/deployments.md", "contains": "forward-only"}], "notes": "paraphrased; requires connecting rollback to migrations"}
+{"id": "release-days", "question": "Which days do we normally ship?", "answerable": true, "labels": [{"document": "engineering/deployments.md", "contains": "Tuesdays and Thursdays"}], "notes": "direct lookup"}
+{"id": "audit-log-retention", "question": "How long do we keep audit logs, and why that long?", "answerable": true, "labels": [{"document": "engineering/data-retention.md", "contains": "400 days"}], "notes": "direct lookup plus a reason in the same chunk"}
+{"id": "retention-after-closure", "question": "If a customer closes their account, how long until their data is gone?", "answerable": true, "labels": [{"document": "engineering/data-retention.md", "contains": "90 days"}], "notes": "distractor: billing.md also says '90 days' about downgrades"}
+{"id": "priority-response-target", "question": "What response time do Priority customers get?", "answerable": true, "labels": [{"document": "policies/support.md", "contains": "four business hours"}], "notes": "direct lookup"}
+{"id": "escalation-criteria", "question": "When does support hand a ticket to engineering?", "answerable": true, "labels": [{"document": "policies/support.md", "contains": "reproducible"}], "notes": "multi-condition answer"}
+{"id": "downgrade-and-closure-retention", "question": "How does data retention differ between an account that was downgraded for non-payment and one that was closed?", "answerable": true, "labels": [{"document": "policies/billing.md", "contains": "retained for 90 days after downgrade"}, {"document": "engineering/data-retention.md", "contains": "After account closure"}], "notes": "multi-document: needs both to answer correctly"}
+{"id": "unanswerable-vacation", "question": "How many vacation days do employees get?", "answerable": false, "notes": "no HR content in the corpus at all"}
+{"id": "unanswerable-pricing", "question": "How much does the Enterprise plan cost per seat?", "answerable": false, "notes": "billing.md discusses refunds but never prices; a plausible-looking near miss"}
+{"id": "unanswerable-sso", "question": "Do we support SAML single sign-on?", "answerable": false, "notes": "authentication.md is topically adjacent but says nothing about SAML; the hardest refusal case"}

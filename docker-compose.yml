@@ -1,0 +1,48 @@
+# Local development infrastructure for Atlas.
+#
+# Phase 1 needs Postgres only. Redis is here because Phase 3 (async ingestion)
+# and Phase 6 (caching) need it, and running it now costs ~10MB of RAM.
+name: atlas
+
+services:
+  postgres:
+    # pgvector ships prebuilt images tracking upstream Postgres releases.
+    # Pinned by digest-less tag on purpose: we want patch updates, not major ones.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: atlas
+      POSTGRES_PASSWORD: atlas
+      POSTGRES_DB: atlas
+      # Deterministic collation so ORDER BY and text comparisons are stable
+      # across machines. Matters for reproducible eval runs.
+      LANG: C
+      POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - atlas_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U atlas -d atlas"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    # appendonly: ingestion job state must survive a container restart once
+    # Phase 3 lands. Harmless now.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - atlas_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  atlas_pgdata:
+  atlas_redisdata:
