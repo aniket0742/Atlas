@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -58,6 +58,16 @@ class SourceSummary(BaseModel):
 class QueryRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     top_k: int | None = Field(default=None, ge=1, le=50)
+    mode: Literal["dense", "lexical", "hybrid"] | None = Field(
+        default=None,
+        description="Retrieval strategy. Defaults to the server setting. "
+        "'lexical' is a diagnostic mode with no similarity gate.",
+    )
+    rerank: bool | None = Field(
+        default=None,
+        description="Override cross-encoder reranking. Costs roughly 700ms per "
+        "query on CPU; see ADR-0020.",
+    )
     min_similarity: float | None = Field(default=None, ge=0.0, le=1.0)
     source_ids: list[uuid.UUID] | None = None
     include_evidence: bool = Field(
@@ -101,10 +111,26 @@ class UsageOut(BaseModel):
     total_tokens: int
 
 
+class RetrievalInfo(BaseModel):
+    """How this answer's evidence was produced.
+
+    Returned on every query so a result can be attributed to a configuration
+    without checking server settings, which may have changed since.
+    """
+
+    mode: str
+    reranked: bool
+    # Highest cosine similarity among dense candidates; None in lexical mode.
+    # This is the value the refusal gate is evaluated against (ADR-0019).
+    best_dense_score: float | None
+    candidates_per_component: dict[str, int]
+
+
 class QueryResponse(BaseModel):
     answer: str
     refused: bool
     refusal_reason: str | None
+    retrieval: RetrievalInfo
     citations: list[CitationOut]
     evidence: list[EvidenceOut] | None = None
     usage: UsageOut
@@ -116,6 +142,8 @@ class HealthResponse(BaseModel):
     database: bool
     embedding_model: str
     llm_model: str
+    retrieval_mode: str
+    rerank_model: str | None
 
 
 class StatsResponse(BaseModel):

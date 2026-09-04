@@ -16,7 +16,7 @@ threshold we can ask directly:
     -> the model is handed only irrelevant evidence, which is the setup for a
        confident wrong answer
 
-Run:  python scripts/calibrate_floor.py
+Run:  python scripts/calibrate_floor.py [dataset.jsonl]
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from atlas.eval.dataset import load  # noqa: E402
 from atlas.providers.factory import get_embedder  # noqa: E402
 from atlas.retrieval.service import Retriever  # noqa: E402
 
-DATASET = Path("eval/datasets/smoke.jsonl")
+DATASET = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("eval/datasets/main.jsonl")
 TOP_K = 8
 FLOORS = [round(0.30 + 0.02 * i, 2) for i in range(21)]  # 0.30 .. 0.70
 

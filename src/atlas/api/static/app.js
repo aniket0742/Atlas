@@ -155,6 +155,15 @@ function renderEvidence(evidence) {
     return;
   }
 
+  // The bar is normalised against this result set, not against an absolute
+  // scale. `score` means cosine in dense mode, a small RRF sum in hybrid mode,
+  // and an unbounded cross-encoder logit after reranking -- three incomparable
+  // scales, none of which map onto a 0-100% bar on its own.
+  const values = evidence.map((c) => c.score);
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  const span = hi - lo || 1;
+
   evidence.forEach((chunk, index) => {
     const item = el("li");
 
@@ -167,13 +176,32 @@ function renderEvidence(evidence) {
     head.append(el("span", "ev-score", chunk.score.toFixed(4)));
     item.append(head);
 
-    // Cosine similarity is in [-1, 1] but everything useful here sits well
-    // above 0; clamp so the bar stays meaningful rather than exact.
     const bar = el("div", "bar");
     const fill = el("span");
-    fill.style.width = `${Math.max(0, Math.min(1, chunk.score)) * 100}%`;
+    // Relative within this list: the top result is always full width, so the
+    // bar shows the gap between results rather than an absolute score.
+    fill.style.width = `${(15 + 85 * ((chunk.score - lo) / span)).toFixed(1)}%`;
     bar.append(fill);
     item.append(bar);
+
+    // Every component that contributed, so a rank can be explained rather than
+    // just displayed. This is the panel that shows hybrid retrieval working.
+    const cs = chunk.component_scores || {};
+    const chips = el("div", "ev-components");
+    const add = (label, value, cls) => {
+      const chip = el("span", cls ? `chip ${cls}` : "chip");
+      chip.append(el("b", null, label), document.createTextNode(` ${value}`));
+      chips.append(chip);
+    };
+    if (cs.dense !== undefined) {
+      add("dense", cs.dense.toFixed(4) + (cs.dense_rank ? ` #${cs.dense_rank}` : ""), "chip-dense");
+    }
+    if (cs.lexical !== undefined) {
+      add("lex", cs.lexical.toFixed(4) + (cs.lexical_rank ? ` #${cs.lexical_rank}` : ""), "chip-lexical");
+    }
+    if (cs.rrf !== undefined) add("rrf", cs.rrf.toFixed(5));
+    if (cs.rerank !== undefined) add("rerank", cs.rerank.toFixed(3), "chip-rerank");
+    if (chips.childElementCount) item.append(chips);
 
     const text = el("p", "ev-text", chunk.text);
     item.append(text);
@@ -192,10 +220,32 @@ function renderEvidence(evidence) {
 }
 
 function renderTimings(data) {
+  const info = $("retrieval-info");
+  info.replaceChildren();
+  const r = data.retrieval;
+  if (r) {
+    const chip = (label, value, cls) => {
+      const c = el("span", cls ? `chip ${cls}` : "chip");
+      c.append(el("b", null, label), document.createTextNode(` ${value}`));
+      info.append(c);
+    };
+    chip("mode", r.mode, "chip-dense");
+    chip("rerank", r.reranked ? "on" : "off", r.reranked ? "chip-rerank" : "");
+    if (r.best_dense_score !== null && r.best_dense_score !== undefined) {
+      chip("best dense", r.best_dense_score.toFixed(4), "chip-lexical");
+    }
+    for (const [component, n] of Object.entries(r.candidates_per_component || {})) {
+      chip(component, `${n} cand`);
+    }
+  }
+
   const list = $("timings");
   list.replaceChildren();
 
-  const order = ["embed_query_ms", "search_ms", "llm_ms", "total_ms"];
+  const order = [
+    "embed_query_ms", "dense_search_ms", "lexical_search_ms",
+    "fuse_ms", "rerank_ms", "llm_ms", "total_ms",
+  ];
   const timings = data.timings_ms || {};
   for (const key of order) {
     if (timings[key] === undefined) continue;
@@ -234,8 +284,11 @@ async function ask(event) {
   const payload = { question, include_evidence: true };
   const topK = $("top-k").value;
   const minSim = $("min-sim").value;
+  const mode = $("mode").value;
   if (topK !== "") payload.top_k = Number(topK);
   if (minSim !== "") payload.min_similarity = Number(minSim);
+  if (mode !== "") payload.mode = mode;
+  if ($("rerank").checked) payload.rerank = true;
 
   try {
     const response = await fetch("/v1/query", {

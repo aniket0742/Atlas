@@ -149,10 +149,11 @@ Note that fastembed downloads a **quantised** ONNX build of the embedding model.
 Any published number should name that, since quantisation can shift retrieval
 quality slightly relative to the original FP32 weights.
 
-## Results so far
+## Phase 1 results (historical)
 
-Run on the 19-query smoke set, `bge-small-en-v1.5`, structure-aware chunking at
-320/64 tokens. Reports in `eval/results/`.
+Run on the 19-query smoke set over the original 5-document corpus. Retained as
+the historical baseline; superseded for measurement by the Phase 2 results
+below, which use a 33-document corpus and 112 queries.
 
 ### E1 — dense retrieval baseline
 
@@ -227,22 +228,151 @@ baseline and drawn a confident wrong conclusion. This is the argument for
 building the harness early and *running* it, rather than trusting it because the
 code reads correctly.
 
+## Phase 2 results
+
+Corpus: 33 documents, 149 chunks. Dataset: `eval/datasets/main.jsonl`, 112
+queries (100 answerable, 12 unanswerable). Embedding `BAAI/bge-small-en-v1.5`,
+chunking 320/64. All retrieval-only: no LLM calls, so every run here is free.
+
+Every number below is backed by a committed report in
+[`eval/baselines/phase2/`](../eval/baselines/phase2), **including the runs for
+the configurations that were rejected**. A claim that hybrid retrieval did not
+help is only checkable if the run behind it still exists.
+
+### The measurement that made Phase 2 possible
+
+The Phase 1 corpus (5 documents, 17 chunks) could not discriminate: Recall@k
+pinned at 1.000 from k=2 with zero variance. The expanded corpus restored
+headroom — dense Recall@1 fell from 0.906 to 0.780 — and tightened intervals from
+±0.11 to ±0.07 by taking n from 16 to 100. Without that step every number below
+would have been noise.
+
+### All configurations
+
+| configuration | Recall@1 | nDCG@1 | Recall@8 | nDCG@8 | retrieval p50 |
+|---|---|---|---|---|---|
+| dense (baseline) | 0.780 | 0.800 | 0.980 | 0.895 | 77 ms |
+| lexical | 0.620 | 0.640 | 0.955 | 0.805 | 2 ms |
+| hybrid (RRF) | 0.720 | 0.740 | 0.990 | 0.881 | 70 ms |
+| dense + rerank | **0.850** | **0.870** | **1.000** | **0.939** | 750 ms |
+| hybrid + rerank | 0.850 | 0.870 | 0.990 | 0.935 | 758 ms |
+
+### E5 — dense vs lexical vs hybrid
+
+Paired bootstrap against dense (see [ADR-0021](../Decision.md) on why paired):
+
+| configuration | depth | metric | delta | paired 95% CI | verdict |
+|---|---|---|---|---|---|
+| lexical | k=1 | Recall@1 | −0.160 | [−0.250, −0.070] | **worse** |
+| lexical | k=8 | nDCG@8 | −0.089 | [−0.139, −0.039] | **worse** |
+| hybrid | k=1 | Recall@1 | −0.060 | [−0.130, +0.010] | no difference |
+| hybrid | k=8 | nDCG@8 | −0.014 | [−0.046, +0.018] | no difference |
+
+**Hybrid retrieval was not adopted.** It is implemented, selectable, and measured
+to make no difference on this dataset. That is a real result, not a failure to
+deliver: the specification asked whether each technique actually improves things,
+and the answer here is no.
+
+The aggregate hides a genuine effect, which is why the per-kind breakdown exists:
+
+| query kind | n | dense | lexical | hybrid | dense+rerank |
+|---|---|---|---|---|---|
+| identifier | 13 | 0.615 | 0.538 | 0.769 | **0.923** |
+| conceptual | 13 | 0.615 | **0.846** | 0.692 | 0.846 |
+| lookup | 36 | 0.861 | 0.667 | 0.750 | **0.917** |
+| paraphrase | 31 | **0.871** | 0.548 | 0.742 | 0.806 |
+| multi-doc | 5 | 0.400 | 0.400 | 0.400 | 0.400 |
+| distractor | 2 | **1.000** | 0.500 | 0.500 | **1.000** |
+
+Hybrid helps `identifier` queries (0.615 → 0.769) exactly as predicted before the
+experiment, and hurts `paraphrase` and `lookup`. Since two thirds of this dataset
+is paraphrase-or-lookup, the aggregate comes out flat. On an identifier-heavy
+corpus the conclusion could invert — which is the argument for keeping the mode
+rather than deleting the code.
+
+Two other things worth reading off this table. `lexical` is the *best*
+configuration for `conceptual` queries (0.846 vs dense 0.615), which was not
+predicted and is not currently explained. And `multi-doc` is stuck at 0.400 for
+every configuration — no retrieval strategy tested here helps a query that needs
+evidence from two documents at once, which is a genuine open problem rather than
+a tuning issue.
+
+### E6 — reranking
+
+| configuration | metric | delta vs dense | paired 95% CI | verdict |
+|---|---|---|---|---|
+| dense + rerank | nDCG@8 | +0.044 | [+0.009, +0.081] | **better** |
+| dense + rerank | Recall@1 | +0.070 | [+0.000, +0.150] | not significant |
+
+**Reranking was adopted**, on by default. nDCG@8 is the metric that matters
+operationally — the model receives 8 chunks — and the improvement there is
+significant. Recall@1 improves by more in absolute terms but its interval touches
+zero.
+
+Cost: retrieval p50 goes from 77ms to 750ms. Framed against the whole request,
+generation already takes ~2.8s, so this is roughly +23% end to end rather than
+10x. `ATLAS_RERANK_ENABLED=false` reverts it.
+
+### E7 — does hybrid still contribute once reranking runs?
+
+No.
+
+| comparison | depth | metric | delta | paired 95% CI | verdict |
+|---|---|---|---|---|---|
+| hybrid+rerank vs dense+rerank | k=1 | Recall@1 | +0.0000 | [+0.0000, +0.0000] | identical |
+| hybrid+rerank vs dense+rerank | k=8 | nDCG@8 | −0.003 | [−0.010, +0.000] | no difference |
+
+A cross-encoder reads the query and passage together, which subsumes what lexical
+matching contributed. Running both pays twice for one effect. This is why the
+shipped configuration is **dense + rerank**, not hybrid + rerank.
+
+### Measurement bugs found by running these experiments
+
+Two, both of which would have corrupted conclusions rather than crashed:
+
+1. **nDCG exceeded 1.0** (1.0164) in the first Phase 1 baseline. DCG summed gain
+   at every rank holding a relevant chunk while IDCG counted labels, and
+   overlapping chunks let several chunks satisfy one label. A smaller version of
+   this bug would have inflated every number without ever crossing 1.0 and left
+   Phase 2 comparing against a corrupted baseline ([ADR-0014](../Decision.md)).
+2. **The comparison test was the wrong test.** Independent-interval overlap is
+   badly conservative for paired data. Correcting it to a paired bootstrap first
+   made a *negative* result significant ([ADR-0021](../Decision.md)).
+
+### What these numbers still do not establish
+
+Unchanged from Phase 1, and worth repeating because the numbers now look
+respectable:
+
+- One synthetic corpus, written by the same person who wrote the queries and the
+  system. Real corpora contain contradictions, near-duplicates and stale versions.
+- Single annotator, so "relevant" means one person's judgement.
+- Several configurations are compared against one baseline with **no correction
+  for multiple comparisons**. With four candidate configurations and two metrics,
+  some chance of a spurious "significant" result remains.
+- Answer quality is still not scored for correctness. Faithfulness is enforced
+  structurally (citation resolution, quote verification); usefulness is not
+  measured.
+
 ## Planned experiments
 
 Recorded here in advance so results are not selected after the fact.
 
-| # | Question | Compares | Phase |
-|---|---|---|---|
-| E1 | What is the dense baseline? | dense, default parameters | 1 |
-| E2 | Where should the similarity floor sit? | sweep floor; refusal correctness both directions | 1 |
-| E3 | Does structure-aware chunking beat fixed-size? | ADR-0009 vs fixed windows, same model | 1–2 |
-| E4 | What chunk size and overlap? | sweep target/overlap tokens | 2 |
-| E5 | Does BM25 add anything over dense? | dense vs hybrid fusion | 2 |
-| E6 | Does cross-encoder reranking pay for its latency? | hybrid vs hybrid + rerank, with latency | 2 |
-| E7 | Is a larger embedding model worth it? | bge-small vs alternatives | 2 |
+| # | Question | Status |
+|---|---|---|
+| E1 | What is the dense baseline? | **done** — rerun on the expanded corpus |
+| E2 | Where should the similarity floor sit? | **done**, then invalidated by the larger corpus ([ADR-0019](../Decision.md)) |
+| E5 | Does lexical retrieval add anything over dense? | **done** — no; hybrid not adopted ([ADR-0018](../Decision.md)) |
+| E6 | Does cross-encoder reranking pay for its latency? | **done** — yes; adopted ([ADR-0020](../Decision.md)) |
+| E7 | Does hybrid still contribute once reranking runs? | **done** — no; reranking subsumes it |
+| E3 | Does structure-aware chunking beat fixed-size? | deferred — would move [ADR-0009](../Decision.md) off `provisional` |
+| E4 | What chunk size and overlap? | deferred |
+| E8 | Is a larger embedding model worth it? | deferred — `bge-small` vs alternatives |
+| E9 | Why is lexical retrieval best on conceptual queries? | open — unexplained result from E5 |
+| E10 | Can anything help multi-document queries? | open — stuck at 0.400 for every configuration tested |
 
-E1 and E2 are the immediate next steps once a database is running. E3 is what
-moves [ADR-0009](../Decision.md) from `provisional` to `accepted` or replaces it.
+E9 and E10 were raised *by* the Phase 2 results rather than planned, and are
+recorded so they are not quietly forgotten.
 
 ## What this evaluation cannot tell you
 

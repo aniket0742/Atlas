@@ -40,11 +40,26 @@ class StubRetriever:
         self._chunks = chunks
         self._candidates = candidates if candidates is not None else chunks
 
-    async def retrieve(self, tenant_id, query, *, top_k=None, min_similarity=None, source_ids=None):
+    async def retrieve(
+        self,
+        tenant_id,
+        query,
+        *,
+        top_k=None,
+        min_similarity=None,
+        source_ids=None,
+        mode=None,
+        rerank=None,
+    ):
         from atlas.retrieval.service import RetrievalResult
 
         return RetrievalResult(
-            chunks=self._chunks, candidates=self._candidates, timings_ms={"search_ms": 1.0}
+            chunks=self._chunks,
+            candidates=self._candidates,
+            timings_ms={"search_ms": 1.0},
+            mode=mode or "dense",
+            best_dense_score=self._candidates[0].score if self._candidates else None,
+            per_component={"dense": len(self._candidates)},
         )
 
 

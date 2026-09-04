@@ -344,3 +344,165 @@ async def test_editing_an_applied_migration_is_refused(tmp_path):
             await conn.execute("DROP TABLE IF EXISTS atlas_checksum_probe")
             await conn.execute("DELETE FROM schema_migrations WHERE version = '9001_test_checksum'")
         await db.close()
+
+
+# ---------------------------------------------------------------------------
+# Lexical retrieval and hybrid fusion (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+async def test_lexical_search_matches_exact_identifiers(db, ingestor, tenant):
+    """The case dense retrieval is weakest at: a rare literal token."""
+    doc = b"""# Errors
+
+## Codes
+
+ATL-4029 means the rate limit was exceeded.
+
+## Notes
+
+Something entirely unrelated about billing and refunds.
+"""
+    await ingest(ingestor, tenant, doc, "errors.md")
+
+    async with db.connection() as conn:
+        rows = await repo.search_lexical(conn, tenant, "What does ATL-4029 mean?", 5)
+
+    assert rows
+    assert "ATL-4029" in rows[0].text
+    assert rows[0].component_scores["lexical"] > 0
+
+
+async def test_lexical_search_uses_or_semantics(db, ingestor, tenant):
+    """A long question must not require every term to appear in one chunk."""
+    await ingest(ingestor, tenant, BILLING, "billing.md")
+
+    async with db.connection() as conn:
+        rows = await repo.search_lexical(
+            conn,
+            tenant,
+            "how long exactly does a customer have to request a refund on their purchase",
+            5,
+        )
+    # Under AND semantics this returns nothing at all.
+    assert rows
+
+
+async def test_lexical_search_on_stopwords_only_returns_nothing(db, ingestor, tenant):
+    await ingest(ingestor, tenant, BILLING, "billing.md")
+    async with db.connection() as conn:
+        assert await repo.search_lexical(conn, tenant, "the and of it", 5) == []
+
+
+async def test_lexical_search_is_tenant_scoped(db, ingestor, settings):
+    """Same isolation guarantee as dense search, enforced independently."""
+    slugs = [f"lex-a-{uuid.uuid4().hex[:8]}", f"lex-b-{uuid.uuid4().hex[:8]}"]
+    async with db.transaction() as conn:
+        a = await repo.ensure_tenant(conn, slugs[0])
+        b = await repo.ensure_tenant(conn, slugs[1])
+    try:
+        result_a = await ingest(ingestor, a, BILLING, "billing.md")
+        await ingest(ingestor, b, BILLING, "billing.md")
+
+        async with db.connection() as conn:
+            rows = await repo.search_lexical(conn, a, "refund within 30 days", 20)
+
+        assert rows
+        assert {r.document_id for r in rows} == {result_a.document_id}
+    finally:
+        async with db.transaction() as conn:
+            await conn.execute("DELETE FROM tenants WHERE id = ANY(%s)", ([a, b],))
+
+
+async def test_lexical_search_respects_the_source_filter(db, ingestor, tenant):
+    await ingest(ingestor, tenant, BILLING, "billing.md", source="policies")
+    await ingest(ingestor, tenant, AUTH, "auth.md", source="engineering")
+
+    async with db.connection() as conn:
+        engineering = await repo.ensure_source(conn, tenant, "engineering")
+        rows = await repo.search_lexical(conn, tenant, "refund tokens", 20,
+                                         source_ids=[engineering])
+
+    assert all(r.document_external_id == "auth.md" for r in rows)
+
+
+async def test_hybrid_returns_chunks_either_component_found(db, ingestor, tenant, settings):
+    from atlas.retrieval.service import Retriever
+
+    await ingest(ingestor, tenant, BILLING, "billing.md")
+    await ingest(ingestor, tenant, AUTH, "auth.md")
+
+    retriever = Retriever(db, FakeEmbeddingProvider(), settings)
+    dense = await retriever.retrieve(tenant, "refund within 30 days", top_k=20, mode="dense")
+    lexical = await retriever.retrieve(tenant, "refund within 30 days", top_k=20, mode="lexical")
+    hybrid = await retriever.retrieve(tenant, "refund within 30 days", top_k=20, mode="hybrid")
+
+    dense_ids = {c.chunk_id for c in dense.candidates}
+    lexical_ids = {c.chunk_id for c in lexical.candidates}
+    hybrid_ids = {c.chunk_id for c in hybrid.candidates}
+
+    assert hybrid_ids == dense_ids | lexical_ids
+    assert hybrid.mode == "hybrid"
+    for chunk in hybrid.candidates:
+        assert "rrf" in chunk.component_scores
+
+
+async def test_similarity_gate_is_query_level_and_survives_fusion(db, ingestor, tenant, settings):
+    """The Phase 2 change: the floor gates the query, not each fused row.
+
+    An RRF score is a sum of reciprocal ranks, so a cosine threshold has no
+    meaning against it. The gate is evaluated on dense candidates before fusion.
+    """
+    from atlas.retrieval.service import Retriever
+
+    await ingest(ingestor, tenant, BILLING, "billing.md")
+    retriever = Retriever(db, FakeEmbeddingProvider(), settings)
+
+    passing = await retriever.retrieve(
+        tenant, "refund within 30 days", top_k=5, mode="hybrid", min_similarity=0.0
+    )
+    assert passing.chunks
+    assert passing.best_dense_score is not None
+
+    # A floor above any achievable similarity must empty `chunks` while leaving
+    # `candidates` intact, because retrieval metrics score candidates.
+    blocked = await retriever.retrieve(
+        tenant, "refund within 30 days", top_k=5, mode="hybrid", min_similarity=1.01
+    )
+    assert blocked.chunks == []
+    assert blocked.candidates
+
+
+async def test_lexical_mode_has_no_similarity_gate(db, ingestor, tenant, settings):
+    """There is no dense score to gate on; lexical mode is for measurement."""
+    from atlas.retrieval.service import Retriever
+
+    await ingest(ingestor, tenant, BILLING, "billing.md")
+    retriever = Retriever(db, FakeEmbeddingProvider(), settings)
+
+    result = await retriever.retrieve(
+        tenant, "refund", top_k=5, mode="lexical", min_similarity=1.01
+    )
+    assert result.best_dense_score is None
+    assert result.chunks == result.candidates
+
+
+async def test_reranking_reorders_and_records_its_score(db, ingestor, tenant, settings):
+    from atlas.providers.reranker import FakeReranker
+    from atlas.retrieval.service import Retriever
+
+    await ingest(ingestor, tenant, BILLING, "billing.md")
+    await ingest(ingestor, tenant, AUTH, "auth.md")
+
+    reranker = FakeReranker()
+    retriever = Retriever(db, FakeEmbeddingProvider(), settings, reranker=reranker)
+    result = await retriever.retrieve(
+        tenant, "refund within 30 days", top_k=5, mode="hybrid", rerank=True
+    )
+
+    assert result.reranked
+    assert reranker.calls, "the reranker was never invoked"
+    for chunk in result.candidates:
+        assert "rerank" in chunk.component_scores
+    scores = [c.score for c in result.candidates]
+    assert scores == sorted(scores, reverse=True)

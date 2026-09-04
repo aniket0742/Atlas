@@ -38,6 +38,7 @@ class QueryReport:
     query_id: str
     question: str
     answerable: bool
+    kind: str
     scores: dict[str, Any] | None
     retrieved: list[dict[str, Any]] = field(default_factory=list)
     # Populated only in with-answers mode.
@@ -68,9 +69,13 @@ class EvalRunner:
         k: int | None = None,
         with_answers: bool = False,
         label: str | None = None,
+        mode: str | None = None,
+        rerank: bool | None = None,
     ) -> dict[str, Any]:
         queries = load(dataset_path)
         top_k = k or self._settings.retrieval_top_k
+        active_mode = mode or self._settings.retrieval_mode
+        use_rerank = self._settings.rerank_enabled if rerank is None else rerank
 
         if with_answers and self._answerer is None:
             raise ValueError("with_answers requires an AnswerService")
@@ -79,7 +84,9 @@ class EvalRunner:
         started = time.perf_counter()
 
         for query in queries:
-            report = await self._run_one(tenant_id, query, top_k, with_answers)
+            report = await self._run_one(
+                tenant_id, query, top_k, with_answers, active_mode, use_rerank
+            )
             reports.append(report)
 
         return self._assemble(
@@ -89,18 +96,31 @@ class EvalRunner:
             dataset_path=dataset_path,
             with_answers=with_answers,
             label=label,
+            mode=active_mode,
+            rerank=use_rerank,
             wall_seconds=time.perf_counter() - started,
         )
 
     async def _run_one(
-        self, tenant_id: uuid.UUID, query: EvalQuery, top_k: int, with_answers: bool
+        self,
+        tenant_id: uuid.UUID,
+        query: EvalQuery,
+        top_k: int,
+        with_answers: bool,
+        mode: str,
+        rerank: bool,
     ) -> QueryReport:
         # Retrieval metrics are computed on the *unfiltered* candidates. The
         # similarity floor is an answering policy, not a retrieval property, and
         # mixing them would make a threshold change look like a retrieval
         # regression.
         result = await self._retriever.retrieve(
-            tenant_id, query.question, top_k=top_k, min_similarity=0.0
+            tenant_id,
+            query.question,
+            top_k=top_k,
+            min_similarity=0.0,
+            mode=mode,  # type: ignore[arg-type]
+            rerank=rerank,
         )
         ranked = result.candidates
 
@@ -146,6 +166,7 @@ class EvalRunner:
             query_id=query.id,
             question=query.question,
             answerable=query.answerable,
+            kind=query.kind,
             scores=scores,
             retrieved=retrieved_rows,
         )
@@ -171,6 +192,8 @@ class EvalRunner:
         dataset_path: Path,
         with_answers: bool,
         label: str | None,
+        mode: str,
+        rerank: bool,
         wall_seconds: float,
     ) -> dict[str, Any]:
         answerable = [r for r in reports if r.answerable and r.scores]
@@ -187,6 +210,30 @@ class EvalRunner:
                 "mean": round(metrics.mean(values), 4),
                 "ci95": [round(low, 4), round(high, 4)],
             }
+
+        # Per-kind breakdown. An aggregate can hide that a retrieval change
+        # helps one query type substantially and does nothing elsewhere, which
+        # is exactly the shape lexical retrieval is expected to have. Reported
+        # without confidence intervals because the per-kind counts are small
+        # enough that an interval would be wider than the range it describes.
+        by_kind: dict[str, Any] = {}
+        for report in answerable:
+            by_kind.setdefault(report.kind, []).append(report)
+        summary["by_kind"] = {
+            kind: {
+                "n": len(rows),
+                "recall_at_k": round(
+                    metrics.mean([float(r.scores["recall_at_k"]) for r in rows if r.scores]), 4
+                ),
+                "mrr": round(
+                    metrics.mean([float(r.scores["reciprocal_rank"]) for r in rows if r.scores]), 4
+                ),
+                "ndcg_at_k": round(
+                    metrics.mean([float(r.scores["ndcg_at_k"]) for r in rows if r.scores]), 4
+                ),
+            }
+            for kind, rows in sorted(by_kind.items())
+        }
 
         if with_answers:
             unanswerable = [r for r in reports if not r.answerable]
@@ -236,7 +283,12 @@ class EvalRunner:
                 "chunk_overlap_tokens": self._settings.chunk_overlap_tokens,
                 "chunk_min_tokens": self._settings.chunk_min_tokens,
                 "min_similarity": self._settings.min_similarity,
-                "retrieval": "dense",
+                "retrieval": mode,
+                "retrieval_candidates": self._settings.retrieval_candidates,
+                "rrf_k": self._settings.rrf_k if mode == "hybrid" else None,
+                "rerank": rerank,
+                "rerank_model": self._settings.rerank_model if rerank else None,
+                "rerank_candidates": self._settings.rerank_candidates if rerank else None,
                 "python": platform.python_version(),
             },
             "summary": summary,

@@ -45,10 +45,41 @@ class Settings(BaseSettings):
     chunk_min_tokens: int = 32
 
     # --- Retrieval --------------------------------------------------------
+    # Measured, not assumed. Hybrid was implemented and evaluated (E5) and showed
+    # no improvement over dense at either k=1 or k=8, so it is not the default.
+    # It stays selectable for measurement and for identifier-heavy corpora, where
+    # the per-kind breakdown does favour it. See ADR-0018.
+    retrieval_mode: Literal["dense", "lexical", "hybrid"] = "dense"
     retrieval_top_k: int = 8
-    # Calibrated in Phase 1 experiment E2, not guessed. See ADR-0013 and
-    # scripts/calibrate_floor.py.
-    min_similarity: float = 0.60
+    # How deep each component retrieves before fusion. Fusing two lists of
+    # length top_k can only reorder those top_k; the gain comes from a chunk one
+    # component ranked 12th and the other ranked 2nd.
+    retrieval_candidates: int = 30
+    # RRF damping constant. 60 is the value from Cormack et al. (2009) and the
+    # usual default; exposed so it can be swept rather than trusted.
+    rrf_k: int = 60
+
+    # --- Reranking --------------------------------------------------------
+    # On by default: the only configuration measured to beat the dense baseline
+    # (nDCG@8 +0.044, paired 95% CI [+0.009, +0.081]). It costs roughly 680ms of
+    # extra retrieval latency, which is about +23% on a request whose generation
+    # step already takes ~2.8s. Set ATLAS_RERANK_ENABLED=false to return to
+    # ~77ms retrieval. See ADR-0020.
+    rerank_enabled: bool = True
+    rerank_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
+    # Cross-encoder cost is linear in this number, so it is the main latency
+    # dial. Measured in experiment E6.
+    rerank_candidates: int = 30
+
+    # --- Refusal ----------------------------------------------------------
+    # Interim permissive setting, NOT a validated optimum. The 0.60 calibrated
+    # in Phase 1 on a 5-document corpus stopped separating once the corpus grew
+    # to 33 documents: 10 of 12 unanswerable queries now score above it and the
+    # distributions overlap outright. 0.55 is a crash barrier for pathological
+    # queries; the model's own sufficient_evidence judgement and citation
+    # validation are the real controls. Revisited with numbers in Phase 3+.
+    # See ADR-0013 and ADR-0019.
+    min_similarity: float = 0.55
 
     # --- API --------------------------------------------------------------
     # Phase 1 has no auth. Every request is attributed to this tenant so that

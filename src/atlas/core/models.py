@@ -95,6 +95,13 @@ class Answer:
     retrieved: list[RetrievedChunk]
     usage: TokenUsage
     timings_ms: dict[str, float]
+    # How the evidence was produced. Returned with every answer so a result can
+    # be attributed to a configuration without consulting server settings, which
+    # may have changed since.
+    retrieval_mode: str = "dense"
+    reranked: bool = False
+    best_dense_score: float | None = None
+    per_component: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(slots=True)

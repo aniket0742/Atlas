@@ -192,3 +192,31 @@ button:disabled { opacity: .55; cursor: progress; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+/* ── retrieval provenance ────────────────────────────────────────────── */
+
+select {
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--ink); font: 14px/1.5 inherit;
+}
+.controls label.check {
+  flex-direction: row; align-items: center; gap: 6px; width: auto;
+  padding-bottom: 9px;
+}
+.controls label.check input { width: auto; }
+
+.retrieval-info {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
+  padding-bottom: 10px; border-bottom: 1px solid var(--line);
+}
+
+/* Per-component scores under each retrieved chunk. */
+.ev-components { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; }
+.chip {
+  font: 10px/1.5 var(--mono); padding: 2px 7px; border-radius: 4px;
+  background: var(--bg); border: 1px solid var(--line); color: var(--muted);
+}
+.chip b { color: var(--ink); font-weight: 600; }
+.chip-dense  { border-color: var(--accent); }
+.chip-lexical { border-color: var(--ok); }
+.chip-rerank { border-color: var(--warn); }

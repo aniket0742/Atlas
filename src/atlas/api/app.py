@@ -29,7 +29,7 @@ from atlas.db.pool import Database
 from atlas.ingest.parsers import UnparseableDocument, UnsupportedDocument
 from atlas.ingest.pipeline import Ingestor, IngestRequest
 from atlas.providers.base import LLMError, LLMTimeout
-from atlas.providers.factory import get_embedder, get_llm
+from atlas.providers.factory import get_embedder, get_llm, get_reranker
 from atlas.retrieval.service import Retriever
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     embedder = get_embedder(settings)
     llm = get_llm(settings)
-    retriever = Retriever(db, embedder, settings)
+    reranker = get_reranker(settings)
+    retriever = Retriever(db, embedder, settings, reranker=reranker)
 
     app.state.settings = settings
     app.state.db = db
@@ -61,6 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.retriever = retriever
     app.state.answerer = AnswerService(db, retriever, llm, settings)
     app.state.llm = llm
+    app.state.reranker = reranker
 
     # Resolve (and create on first boot) the tenant every request is attributed
     # to, so request handling never has to branch on "does the tenant exist".
@@ -68,9 +70,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.tenant_id = await repo.ensure_tenant(conn, settings.default_tenant_slug)
 
     logger.info(
-        "atlas ready embedding=%s llm=%s tenant=%s",
+        "atlas ready embedding=%s llm=%s retrieval=%s rerank=%s tenant=%s",
         embedder.model_id,
         llm.model_id,
+        settings.retrieval_mode,
+        reranker.model_id if reranker else "off",
         app.state.tenant_id,
     )
     try:
@@ -165,6 +169,10 @@ async def health(request: Request, db: DbDep) -> schemas.HealthResponse:
         database=database_ok,
         embedding_model=request.app.state.embedder.model_id,
         llm_model=request.app.state.llm.model_id,
+        retrieval_mode=request.app.state.settings.retrieval_mode,
+        rerank_model=(
+            request.app.state.reranker.model_id if request.app.state.reranker else None
+        ),
     )
 
 
@@ -286,6 +294,8 @@ async def query(
         top_k=body.top_k,
         min_similarity=body.min_similarity,
         source_ids=body.source_ids,
+        mode=body.mode,
+        rerank=body.rerank,
     )
     return _to_query_response(result, include_evidence=body.include_evidence)
 
@@ -295,6 +305,12 @@ def _to_query_response(result: Answer, *, include_evidence: bool) -> schemas.Que
         answer=result.text,
         refused=result.refused,
         refusal_reason=result.refusal_reason,
+        retrieval=schemas.RetrievalInfo(
+            mode=result.retrieval_mode,
+            reranked=result.reranked,
+            best_dense_score=result.best_dense_score,
+            candidates_per_component=result.per_component,
+        ),
         citations=[
             schemas.CitationOut(
                 chunk_id=c.chunk_id,

@@ -30,15 +30,26 @@
       <form id="ask-form">
         <textarea id="question" rows="3" placeholder="e.g. How long do customers have to request a refund?" required></textarea>
         <div class="controls">
+          <label>retrieval
+            <select id="mode">
+              <option value="">server default</option>
+              <option value="dense">dense</option>
+              <option value="lexical">lexical</option>
+              <option value="hybrid">hybrid</option>
+            </select>
+          </label>
           <label>top_k
             <input id="top-k" type="number" min="1" max="50" placeholder="8">
           </label>
           <label>min_similarity
-            <input id="min-sim" type="number" min="0" max="1" step="0.01" placeholder="0.60">
+            <input id="min-sim" type="number" min="0" max="1" step="0.01" placeholder="0.55">
+          </label>
+          <label class="check">
+            <input id="rerank" type="checkbox"> rerank
           </label>
           <button id="ask-btn" type="submit">Ask</button>
         </div>
-        <p class="hint">Blank fields use the server defaults. Responses are not streamed — the request blocks until the model returns.</p>
+        <p class="hint">Blank fields use the server defaults. Cross-encoder reranking costs roughly 700ms per query on CPU. Responses are not streamed — the request blocks until the model returns.</p>
       </form>
     </div>
 
@@ -61,7 +72,7 @@
 
     <div id="evidence-panel" class="panel" hidden>
       <h2>Retrieved chunks <span id="evidence-count" class="count"></span></h2>
-      <p class="hint">Everything retrieval returned above the similarity floor, in rank order. These are the chunks the model was given.</p>
+      <p class="hint">The chunks the model was given, in final rank order. Each shows every component that contributed: dense similarity, lexical rank, the fused RRF score, and the reranker score where it ran.</p>
       <ol id="evidence" class="evidence"></ol>
     </div>
 
@@ -72,6 +83,7 @@
 
     <div id="metrics-panel" class="panel" hidden>
       <h2>Request</h2>
+      <div id="retrieval-info" class="retrieval-info"></div>
       <dl id="timings" class="metrics"></dl>
     </div>
 

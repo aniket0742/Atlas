@@ -82,3 +82,31 @@ class LLMProvider(Protocol):
         Raises LLMTimeout on timeout, LLMError on any other provider failure.
         """
         ...
+
+
+@runtime_checkable
+class RerankProvider(Protocol):
+    """Scores (query, passage) pairs directly.
+
+    A cross-encoder differs from the embedding model in kind, not just quality:
+    an embedding model encodes the query and the passage independently and
+    compares the results, so it never sees the two together. A cross-encoder
+    reads both in one forward pass and can therefore judge whether a passage
+    answers *this* question rather than whether it is about the same topic.
+
+    The cost is that it cannot be precomputed or indexed -- every pair is a model
+    call -- so it only ever runs over a shortlist that cheaper retrieval already
+    produced.
+    """
+
+    @property
+    def model_id(self) -> str: ...
+
+    def rerank(self, query: str, passages: list[str]) -> list[float]:
+        """Return one relevance score per passage, higher being better.
+
+        Scores are comparable within a single call only. Cross-encoder outputs
+        are unnormalised logits whose scale varies by query, so they order a
+        shortlist but say nothing absolute about relevance.
+        """
+        ...

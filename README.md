@@ -3,11 +3,11 @@
 A retrieval platform that answers questions about an organisation's own
 documents, with citations, and refuses when the answer is not in the corpus.
 
-**Status: Phase 1 complete and verified against a live database.** Experiments
-E1 (dense retrieval baseline) and E2 (similarity-floor calibration) have been run
-and are recorded in [`docs/evaluation.md`](docs/evaluation.md). Every number
-below was measured on this machine; where a number is ceiling-limited by the size
-of the sample corpus, that is stated rather than glossed over.
+**Status: Phase 2 complete.** Lexical retrieval, hybrid fusion and cross-encoder
+reranking are implemented and measured against a recorded baseline. Two of the
+three were **not adopted**, because measurement said they did not help — the
+reasoning and the numbers are in [`docs/evaluation.md`](docs/evaluation.md) and
+[`Decision.md`](Decision.md). Every number below was measured on this machine.
 
 ---
 
@@ -64,10 +64,11 @@ Reasoning for these and every other significant choice is in
              └──────┬─────────────────────────────────┘
                     │
              ┌──────▼───────┐
-  question   │ Retrieval    │   dense (Phase 1)
-  ──────────▶│              │   + BM25 + reranking (Phase 2)
+  question   │ Retrieval    │   dense  (default)
+  ──────────▶│              │   lexical / hybrid RRF  (selectable, measured)
+             │              │   → cross-encoder rerank  (default on)
              └──────┬───────┘
-                    │ evidence, above a similarity floor
+                    │ evidence, if the query passed the similarity gate
              ┌──────▼───────┐
              │ Answering    │   structured output, then:
              │              │     resolve citations
@@ -95,6 +96,8 @@ for why Kafka was considered and rejected.
 | DB driver | psycopg 3, hand-written SQL | the interesting queries are pgvector operators ([ADR-0005](Decision.md)) |
 | Migrations | numbered `.sql` + checksum | index DDL that autogenerate cannot model ([ADR-0006](Decision.md)) |
 | Embeddings | `BAAI/bge-small-en-v1.5` via fastembed (local, CPU, ONNX) | free re-indexing makes retrieval experiments affordable ([ADR-0007](Decision.md)) |
+| Lexical search | PostgreSQL FTS (`tsvector` + GIN, `ts_rank_cd`) | no new infrastructure; **not BM25**, and not called that ([ADR-0017](Decision.md)) |
+| Reranking | `Xenova/ms-marco-MiniLM-L-6-v2` cross-encoder, local | the one change measured to beat the baseline ([ADR-0020](Decision.md)) |
 | Generation | Google Gemini free tier, behind a `Protocol` | no paid dependency; swappable ([ADR-0008](Decision.md)) |
 | UI | plain HTML/CSS/JS served by FastAPI | same-origin, no build step, no npm ([ADR-0015](Decision.md)) |
 | Local env | Docker Compose (api + postgres + redis) | one command starts everything ([ADR-0016](Decision.md)) |
@@ -167,13 +170,17 @@ it shows is something the API already returns.
 
 | Panel | Shows |
 |---|---|
-| Ask | question, with optional `top_k` and `min_similarity` overrides |
+| Ask | question, with per-request overrides for retrieval mode, `top_k`, `min_similarity` and reranking |
 | Answer | the answer, or the refusal and its `refusal_reason` |
 | Citations | quote, document, character span, page, and a **verbatim / not verbatim** badge |
-| Retrieved chunks | every chunk sent to the model, in rank order, with similarity scores |
-| Request | per-stage latency (embed / search / LLM / total) and token usage |
+| Retrieved chunks | every chunk sent to the model, in rank order, with **per-component scores**: dense similarity and rank, lexical rank, fused RRF score, reranker score |
+| Request | retrieval mode, whether reranking ran, the gate's best dense score, per-stage latency and token usage |
 | Corpus | document and chunk counts, per-document indexing status |
 | Add a document | upload and index a file, with an explicit processing state |
+
+Switching the retrieval mode and re-asking the same question is the quickest way
+to see hybrid fusion working: the per-component chips show a chunk's dense rank,
+its lexical rank, and the fused score that put it where it is.
 
 The **verbatim badge** is the panel worth looking at: it makes the otherwise
 invisible groundedness guarantee visible. A citation is only listed at all if its
@@ -233,18 +240,23 @@ The shipped dataset has 19 queries (16 answerable, 3 unanswerable). That is a
 smoke set for catching regressions, not a benchmark, and the confidence intervals
 are wide enough to say so. Overlapping intervals mean no measured difference.
 
-**Measured baseline** (dense retrieval, `bge-small-en-v1.5`, 95% bootstrap CIs):
+**Measured** on 112 queries over 33 documents (149 chunks), retrieval only:
 
-| k | Recall@k | MRR | nDCG@k |
-|---|---|---|---|
-| 1 | 0.906 [0.78–1.00] | 0.938 [0.81–1.00] | 0.938 [0.81–1.00] |
-| 2 | 1.000 [1.00–1.00] | 0.969 [0.91–1.00] | 0.977 [0.93–1.00] |
+| configuration | Recall@1 | nDCG@8 | retrieval p50 | adopted |
+|---|---|---|---|---|
+| dense (baseline) | 0.780 | 0.895 | 77 ms | — |
+| lexical | 0.620 | 0.805 | 2 ms | no — significantly worse |
+| hybrid (RRF) | 0.720 | 0.881 | 70 ms | no — no measured difference |
+| **dense + rerank** | **0.850** | **0.939** | 750 ms | **yes** |
+| hybrid + rerank | 0.850 | 0.935 | 758 ms | no — hybrid adds nothing here |
 
-**Similarity floor**, calibrated by `scripts/calibrate_floor.py`: answerable
-questions score 0.669–0.879 on their relevant chunk; unanswerable questions top
-out at 0.639. The floor is set to **0.60** — deliberately below the apparently
-optimal 0.64–0.66, because a 0.03 gap measured on three queries is not a
-parameter worth fitting. See [ADR-0013](Decision.md).
+Comparisons use a **paired** bootstrap over per-query differences, not overlap of
+independent intervals. The rule registered before the experiments used the
+latter, which is the wrong test for paired data; the correction and the reasons
+it is not post-hoc rationalisation are in [ADR-0021](Decision.md).
+
+Two of three Phase 2 techniques were implemented, measured, and **not adopted**.
+That is the intended outcome of measuring rather than assuming.
 
 ## Testing
 
@@ -270,12 +282,17 @@ Current, and honest:
   has not been measured. Marked `provisional`. ([ADR-0009](Decision.md))
 - **No authentication.** Every request is attributed to one configured tenant.
   The tenant plumbing is complete; the identity layer is Phase 5.
-- **Dense retrieval only.** No lexical search, so exact-match queries (error
-  codes, identifiers) are weak. Phase 2.
-- **The eval corpus is too small to discriminate.** 5 documents / 17 chunks means
-  Recall@k saturates at k=2, so Phase 2 comparisons must be made at k=1 and on a
-  larger corpus. Reporting "hybrid retrieval keeps Recall@8 at 1.0" would be
-  meaningless — see [`docs/evaluation.md`](docs/evaluation.md).
+- **Multi-document queries are unsolved.** Questions needing evidence from two
+  documents score Recall@1 of 0.400 under *every* configuration tested. No
+  retrieval strategy here helps; it is an open problem, not a tuning gap.
+- **Reranking costs ~680ms per query.** Adopted because the quality gain is
+  measured and significant, but it is the dominant retrieval cost. Disable with
+  `ATLAS_RERANK_ENABLED=false`.
+- **The similarity floor no longer separates.** At 33 documents, 10 of 12
+  unanswerable queries score above it. It is an interim crash barrier at 0.55,
+  not a validated threshold ([ADR-0019](Decision.md)).
+- **Lexical search is English-only** (`to_tsvector('english', ...)`) and is
+  PostgreSQL FTS rather than BM25 ([ADR-0017](Decision.md)).
 - **Embedding throughput is a concern.** *Measured* at roughly 350 ms per
   ~250-token chunk on one laptop CPU with the quantised ONNX build. Fine
   interactively, slow for bulk ingestion. Phase 6 target.
@@ -296,7 +313,7 @@ Current, and honest:
 | Phase | Scope | State |
 |---|---|---|
 | 1 | End-to-end RAG, citations, tenancy in schema, **eval harness** | complete, E1+E2 run |
-| 2 | BM25 + hybrid fusion + reranking, measured against Phase 1 baseline | next |
+| 2 | Lexical + hybrid + reranking, measured against the Phase 1 baseline | complete — reranking adopted, hybrid rejected |
 | 3 | Postgres job queue, workers, retries, DLQ, incremental re-crawl | planned |
 | 4 | Tool use: knowledge base, GitHub diffs, fixed metadata queries | planned |
 | 5 | AuthN/AuthZ, RBAC, rate limiting, filtered-recall fix for HNSW | planned |

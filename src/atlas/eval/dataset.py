@@ -58,6 +58,11 @@ class EvalQuery:
     question: str
     answerable: bool = True
     labels: list[Label] = field(default_factory=list)
+    # Query type: lookup, paraphrase, identifier, conceptual, multi-doc,
+    # distractor, unanswerable. Carried so metrics can be broken down per kind
+    # -- an aggregate can easily hide that lexical retrieval helps identifier
+    # queries substantially while changing nothing else.
+    kind: str = "unclassified"
     notes: str | None = None
 
 
@@ -111,6 +116,7 @@ def load(path: Path) -> list[EvalQuery]:
                 question=str(record["question"]),
                 answerable=answerable,
                 labels=labels,
+                kind=str(record.get("kind", "unclassified")),
                 notes=record.get("notes"),
             )
         )

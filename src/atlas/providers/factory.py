@@ -10,7 +10,7 @@ from __future__ import annotations
 from functools import lru_cache
 
 from atlas.config import Settings, get_settings
-from atlas.providers.base import EmbeddingProvider, LLMProvider
+from atlas.providers.base import EmbeddingProvider, LLMProvider, RerankProvider
 
 
 @lru_cache(maxsize=4)
@@ -46,3 +46,29 @@ def get_llm(settings: Settings | None = None) -> LLMProvider:
         max_output_tokens=s.llm_max_output_tokens,
         temperature=s.llm_temperature,
     )
+
+
+@lru_cache(maxsize=4)
+def _build_reranker(provider: str, model: str, cache_dir: str) -> RerankProvider:
+    if provider == "fake":
+        from atlas.providers.reranker import FakeReranker
+
+        return FakeReranker()
+
+    from atlas.providers.reranker import FastEmbedReranker
+
+    return FastEmbedReranker(model_name=model, cache_dir=cache_dir)
+
+
+def get_reranker(settings: Settings | None = None) -> RerankProvider | None:
+    """Build the reranker, or None when reranking is disabled.
+
+    Returning None rather than a no-op keeps "reranking is off" visible in the
+    retrieval result and in the health endpoint, instead of silently running a
+    stage that does nothing.
+    """
+    s = settings or get_settings()
+    if not s.rerank_enabled:
+        return None
+    provider = "fake" if s.embedding_provider == "fake" else "fastembed"
+    return _build_reranker(provider, s.rerank_model, str(s.model_cache_dir))

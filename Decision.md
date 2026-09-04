@@ -638,3 +638,233 @@ Phase 7 addresses deployment.
 
 **Reconsider.** Phase 7, which needs a non-editable install, a pinned base image
 digest, and a non-root user.
+
+---
+
+## ADR-0017: PostgreSQL full-text search, not BM25
+
+**Status:** accepted (Phase 2)
+
+**Problem.** Dense retrieval is weak on rare literal tokens — error codes,
+environment variable names, header names. Measured on the Phase 2 baseline:
+Recall@1 was 0.615 for `identifier` queries against 0.871 for `paraphrase`.
+
+**Alternatives considered.**
+
+- *Okapi BM25 via an extension* (`pg_search` / ParadeDB). Real BM25 with term
+  saturation and length normalisation. Requires a non-standard Postgres image
+  and pins us to that extension's release cycle.
+- *BM25 hand-implemented in SQL* over a term-frequency table. Accurate, and a
+  meaningful amount of index maintenance to own.
+- *An in-process library* such as `rank_bm25`. Accurate scoring, but it holds the
+  corpus in memory and cannot compose with the tenant predicate inside the
+  query, which is exactly the property ADR-0003 exists to protect.
+- *PostgreSQL full-text search.* Built in, composes with existing filters, one
+  generated column and one GIN index.
+
+**Decision.** PostgreSQL FTS: a `text_search` tsvector generated column with a
+GIN index, ranked by `ts_rank_cd`.
+
+**Naming, deliberately.** This is **not BM25** and is not described as such
+anywhere in the codebase. `ts_rank_cd` is a coverage-density ranking: it rewards
+the count and proximity of matching lexemes but implements neither BM25's term
+saturation nor its document-length normalisation. The specification asked for
+"BM25 or equivalent lexical retrieval", and calling FTS "BM25" is a claim the
+code would not support.
+
+**Two implementation details that decide whether it works at all.**
+
+1. **OR, not AND.** `plainto_tsquery` joins lexemes with `&`, so a twelve-word
+   question requires all twelve to appear in one chunk and reliably matches
+   nothing. Rewriting `&` to `|` makes it "any of these lexemes" and lets
+   ranking, rather than the WHERE clause, decide quality.
+2. **The generated column must use the two-argument `to_tsvector`.** The
+   one-argument form depends on `default_text_search_config` and is only
+   STABLE, which a generated column rejects. Pinning the config is required,
+   and it also stops the index changing meaning if a database setting changes.
+
+**Trade-offs.** English-only stemming. No BM25-quality ranking. Unlike the HNSW
+index, a GIN index composes normally with the tenant predicate via a bitmap
+scan, so the ADR-0003 under-fill problem does not apply here.
+
+**Reconsider if.** Measurement shows lexical ranking quality is the limiting
+factor. It currently is not — see ADR-0018, where lexical retrieval measured
+*worse* than dense.
+
+---
+
+## ADR-0018: Hybrid retrieval implemented, measured, and not adopted
+
+**Status:** implemented but **not default** (Phase 2)
+
+**Problem.** Does combining dense and lexical retrieval improve results?
+
+**Decision on fusion method.** Reciprocal Rank Fusion. Cosine similarity sits in
+a narrow band around 0.6-0.9 while `ts_rank_cd` is bounded to [0, 1) and
+distributed quite differently; the two are not comparable, and per-query min-max
+normalisation would make the top hit of every query score 1.0 regardless of
+whether it is any good — destroying the signal that a query has no good match at
+all. RRF combines ranks, which are on the same scale by construction. The cost is
+that score magnitude is discarded: a dense match at 0.95 and one at 0.62
+contribute identically when they hold the same rank.
+
+**Decision on adoption: dense remains the default.**
+
+Measured on 100 answerable queries, paired bootstrap against the dense baseline:
+
+| configuration | Recall@1 | nDCG@1 | Recall@8 | nDCG@8 |
+|---|---|---|---|---|
+| dense (baseline) | 0.780 | 0.800 | 0.980 | 0.895 |
+| lexical | 0.620 | 0.640 | 0.955 | 0.805 |
+| hybrid | 0.720 | 0.740 | 0.990 | 0.881 |
+
+- **Lexical alone is significantly worse**: Recall@1 −0.160, CI [−0.250, −0.070].
+- **Hybrid shows no measured difference** from dense at either depth: Recall@1
+  −0.060 (CI [−0.130, +0.010]), nDCG@8 −0.014 (CI [−0.046, +0.018]).
+
+Hybrid is therefore implemented and selectable but is not the default. Making it
+the default would be adding a subsystem for its own sake, which is the specific
+failure this project set out to avoid.
+
+**What the aggregate hides, and why the code stays.** Per-kind Recall@1 shows
+hybrid doing exactly what was predicted, on a slice too small to move the total:
+
+| query kind | n | dense | lexical | hybrid |
+|---|---|---|---|---|
+| identifier | 13 | 0.615 | 0.538 | **0.769** |
+| conceptual | 13 | 0.615 | **0.846** | 0.692 |
+| lookup | 36 | **0.861** | 0.667 | 0.750 |
+| paraphrase | 31 | **0.871** | 0.548 | 0.742 |
+
+Hybrid helps identifier queries substantially and hurts paraphrase and lookup
+queries, and this corpus is about two thirds paraphrase-or-lookup. On a corpus
+weighted towards identifiers the conclusion could invert, which is why the mode
+is kept rather than deleted.
+
+**Reconsider if.** A deployment's query mix is identifier-heavy, or a weighted
+fusion — tuning the dense and lexical contributions rather than treating them
+equally — is measured and beats plain RRF.
+
+---
+
+## ADR-0019: The similarity floor is a query-level gate, not a per-chunk filter
+
+**Status:** accepted (Phase 2), supersedes the mechanism in ADR-0013
+
+**Problem.** In Phase 1 the floor filtered individual chunks by cosine
+similarity. Fusion breaks that: an RRF score is a sum of reciprocal ranks and a
+reranker score is an unnormalised logit. A threshold calibrated on cosine has no
+meaning against either, and applying one anyway would silently change refusal
+behaviour while every retrieval metric continued to look correct.
+
+**Decision.** The floor is evaluated on the **dense candidates, before fusion**,
+as a single query-level decision: if no dense candidate reaches the floor, the
+query is treated as having no evidence and answering refuses. Otherwise the final
+ranking is returned untouched.
+
+**Why this is better than a patch.** It matches what the floor was always for —
+deciding whether the corpus can answer at all, which is a property of the query
+rather than of each chunk. It is also the only formulation that survives a change
+to the final ranking method, including ones not yet built.
+
+In `lexical` mode there is no dense score and therefore no gate; that mode is for
+measurement, not for serving, and the API documents it as such.
+
+**Value.** 0.55, interim and explicitly **not a validated optimum**. The 0.60
+calibrated in Phase 1 stopped separating when the corpus grew from 5 to 33
+documents: 10 of 12 unanswerable queries now score above it, and the answerable
+and unanswerable distributions overlap outright. With 33 documents there is
+nearly always something topically adjacent. The floor is a crash barrier for
+pathological queries; the model's `sufficient_evidence` judgement and citation
+validation (ADR-0010) are the real controls.
+
+**Reconsider.** When the eval set grows further, or if measured refusal
+behaviour degrades.
+
+---
+
+## ADR-0020: Cross-encoder reranking, adopted
+
+**Status:** accepted, on by default (Phase 2)
+
+**Problem.** Both retrieval methods score a query and a passage independently and
+then compare the results, so neither ever sees the pair together. A cross-encoder
+reads both in one forward pass and can judge whether a passage answers *this*
+question rather than whether it is about the same topic.
+
+**Decision.** `Xenova/ms-marco-MiniLM-L-6-v2` (~80MB) via fastembed, reranking
+the top 30 first-stage candidates. Local and free, consistent with ADR-0007.
+
+**Measured**, paired bootstrap against the dense baseline:
+
+| configuration | Recall@1 | nDCG@8 | retrieval p50 |
+|---|---|---|---|
+| dense | 0.780 | 0.895 | 77ms |
+| dense + rerank | **0.850** | **0.939** | 750ms |
+
+nDCG@8 **+0.044, CI [+0.009, +0.081] — significant.** Recall@1 +0.070 with
+CI [+0.000, +0.150], which does not clear the bar on its own.
+
+Per-kind Recall@1 shows the gain is broad rather than concentrated in one slice:
+identifier 0.615 → 0.923, conceptual 0.615 → 0.846, lookup 0.861 → 0.917.
+
+**The cost, stated plainly.** Retrieval goes from 77ms to roughly 750ms, about
+10x. In context that is +680ms on a request whose generation step already takes
+~2.8s, so around +23% end to end rather than 10x. It is enabled by default
+because answer quality is this system's stated priority and the gain is measured;
+`ATLAS_RERANK_ENABLED=false` returns to 77ms retrieval at lower quality. Cost is
+linear in `rerank_candidates`, which is the dial to turn before disabling it
+outright.
+
+**A negative result worth recording (E7).** Reranking makes the lexical half
+redundant. `dense+rerank` and `hybrid+rerank` are indistinguishable — Recall@1
+differs by exactly 0.0000, and at k=8 hybrid is marginally *worse* (−0.010,
+CI [−0.030, +0.000]). A cross-encoder that reads the pair directly subsumes what
+lexical matching was contributing, so running both is paying twice for one
+effect. This is why the shipped default is dense + rerank rather than
+hybrid + rerank.
+
+**Reconsider if.** Latency becomes the binding constraint, or a larger reranker
+(`BAAI/bge-reranker-base`, roughly 13x the size) is measured to justify its cost.
+
+---
+
+## ADR-0021: Paired bootstrap, replacing comparison of independent intervals
+
+**Status:** accepted (Phase 2), corrects the rule registered in Step 4
+
+**Problem.** The decision rule registered before running the Phase 2 experiments
+was: adopt a configuration only if it beats the incumbent with **non-overlapping
+95% confidence intervals**. That rule is statistically wrong, and it was wrong
+before any number existed.
+
+Configurations are evaluated on the *same* queries, so the comparison is paired.
+Independent intervals ignore the pairing and are dominated by variance *between
+queries* — some questions are simply harder — rather than by the difference
+between configurations. Two configurations can differ on nearly every query and
+still produce comfortably overlapping intervals.
+
+**Decision.** Comparisons use a paired bootstrap over per-query differences. The
+interval is on the difference itself, so "the interval excludes zero" is the
+statement that the configurations actually differ.
+
+**Changing an analysis method after seeing results is how false positives get
+manufactured**, so three things were done to keep this honest:
+
+1. The change was made for a stated methodological reason, not because a result
+   was disappointing.
+2. It was applied symmetrically to every configuration. Its first effect was to
+   make a **negative** result significant: lexical retrieval, which the unpaired
+   test scored as "overlapping", is significantly *worse* than dense
+   (CI [−0.250, −0.070]).
+3. Both tests are still printed side by side, so the change in method is visible
+   in the output rather than quietly swapped in.
+
+**What this does not fix.** The sampling limitation is untouched: 100 queries
+over one synthetic corpus labelled by one person. This removes a statistical
+error, not the generalisation problem.
+
+**Reconsider if.** The eval set grows enough that a permutation test, or a
+correction for multiple comparisons, becomes worthwhile — the current sweep tests
+several configurations against one baseline without any such correction, which is
+a real if minor weakness.

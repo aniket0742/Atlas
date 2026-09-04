@@ -377,3 +377,84 @@ async def search_dense(
         )
         for row in rows
     ]
+
+
+async def search_lexical(
+    conn: AsyncConnection,
+    tenant_id: uuid.UUID,
+    query_text: str,
+    limit: int,
+    *,
+    source_ids: list[uuid.UUID] | None = None,
+) -> list[RetrievedChunk]:
+    """Full-text search over chunk text, scoped to one tenant.
+
+    This is PostgreSQL FTS, not BM25 (ADR-0017). `ts_rank_cd` is a coverage
+    density ranking; it has no BM25 term saturation and no BM25 length
+    normalisation. The name matters because "we implemented BM25" is a claim
+    this code would not support.
+
+    Two details that decide whether this returns anything at all:
+
+    * **OR, not AND.** `plainto_tsquery` joins every lexeme with `&`, so a
+      twelve-word natural-language question demands that all twelve appear in
+      one chunk and reliably matches nothing. Rewriting `&` to `|` turns it into
+      "any of these lexemes", which is what a ranked search needs -- ranking,
+      not the WHERE clause, decides which matches are good.
+
+    * **Normalisation flag 32** divides the rank by itself plus one, bounding it
+      to [0, 1). Fusion uses ranks rather than scores so this does not affect
+      ordering, but it keeps the number displayable next to a cosine similarity
+      without implying the two are comparable.
+
+    A query of only stopwords produces an empty tsquery, which matches nothing
+    and returns an empty list rather than raising.
+    """
+    filters = ["c.tenant_id = %(tenant)s", "c.text_search @@ q.tsq"]
+    params: dict[str, Any] = {"tenant": tenant_id, "query": query_text, "limit": limit}
+    if source_ids:
+        filters.append("d.source_id = ANY(%(source_ids)s)")
+        params["source_ids"] = source_ids
+
+    cur = await conn.execute(
+        f"""
+        WITH q AS (
+            SELECT replace(
+                plainto_tsquery('english', %(query)s)::text, '&', '|'
+            )::tsquery AS tsq
+        )
+        SELECT c.id AS chunk_id, c.document_id, c.ordinal, c.text,
+               c.char_start, c.char_end, c.heading_path,
+               d.external_id AS document_external_id,
+               d.title AS document_title, d.uri AS document_uri,
+               s.name AS source_name,
+               ts_rank_cd(c.text_search, q.tsq, 32) AS rank
+        FROM chunks c
+        CROSS JOIN q
+        JOIN documents d ON d.id = c.document_id AND d.version = c.document_version
+        JOIN sources s   ON s.id = d.source_id
+        WHERE {" AND ".join(filters)}
+        ORDER BY rank DESC, c.id
+        LIMIT %(limit)s
+        """,
+        params,
+    )
+    rows = await cur.fetchall()
+    return [
+        RetrievedChunk(
+            chunk_id=row["chunk_id"],
+            document_id=row["document_id"],
+            document_external_id=row["document_external_id"],
+            document_title=row["document_title"],
+            document_uri=row["document_uri"],
+            source_name=row["source_name"],
+            ordinal=row["ordinal"],
+            text=row["text"],
+            char_start=row["char_start"],
+            char_end=row["char_end"],
+            heading_path=list(row["heading_path"] or []),
+            score=float(row["rank"]),
+            component_scores={"lexical": float(row["rank"])},
+        )
+        for row in rows
+    ]

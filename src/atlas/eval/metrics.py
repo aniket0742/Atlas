@@ -147,3 +147,57 @@ def bootstrap_ci(
         means[int(lower * resamples)],
         means[min(resamples - 1, int((1 - lower) * resamples))],
     )
+
+
+def paired_bootstrap_delta(
+    baseline: list[float],
+    candidate: list[float],
+    *,
+    confidence: float = 0.95,
+    resamples: int = 5000,
+    seed: int = 0,
+) -> tuple[float, tuple[float, float]]:
+    """Mean per-query difference (candidate - baseline) with a bootstrap CI.
+
+    Both lists must be the same queries in the same order.
+
+    Why this rather than comparing two independent confidence intervals: the two
+    configurations are evaluated on the *same* queries, so the comparison is
+    paired. Independent intervals ignore that pairing and are badly conservative
+    -- two configurations can differ on almost every query and still produce
+    intervals that overlap, because each interval is dominated by variance
+    *between queries* (some questions are simply harder) rather than by the
+    difference between configurations.
+
+    Resampling the per-query differences cancels that shared difficulty. The
+    interval is over the difference itself, so "the interval excludes zero" is
+    the statement that the configurations actually differ.
+
+    This does not fix the deeper limit: 100 queries from one synthetic corpus
+    labelled by one person. It removes a statistical error, not the sampling
+    one.
+    """
+    if len(baseline) != len(candidate):
+        raise ValueError(f"paired inputs must align: {len(baseline)} vs {len(candidate)}")
+    if not baseline:
+        return (0.0, (0.0, 0.0))
+
+    import random
+
+    deltas = [c - b for b, c in zip(baseline, candidate, strict=True)]
+    observed = sum(deltas) / len(deltas)
+
+    rng = random.Random(seed)
+    n = len(deltas)
+    means = []
+    for _ in range(resamples):
+        means.append(sum(deltas[rng.randrange(n)] for _ in range(n)) / n)
+    means.sort()
+    tail = (1 - confidence) / 2
+    return (
+        observed,
+        (
+            means[int(tail * resamples)],
+            means[min(resamples - 1, int((1 - tail) * resamples))],
+        ),
+    )

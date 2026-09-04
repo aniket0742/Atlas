@@ -84,6 +84,8 @@ class AnswerService:
         top_k: int | None = None,
         min_similarity: float | None = None,
         source_ids: list[uuid.UUID] | None = None,
+        mode: str | None = None,
+        rerank: bool | None = None,
     ) -> Answer:
         started = time.perf_counter()
         retrieval = await self._retriever.retrieve(
@@ -92,7 +94,15 @@ class AnswerService:
             top_k=top_k,
             min_similarity=min_similarity,
             source_ids=source_ids,
+            mode=mode,  # type: ignore[arg-type]
+            rerank=rerank,
         )
+        provenance = {
+            "retrieval_mode": retrieval.mode,
+            "reranked": retrieval.reranked,
+            "best_dense_score": retrieval.best_dense_score,
+            "per_component": dict(retrieval.per_component),
+        }
         timings = dict(retrieval.timings_ms)
 
         if not retrieval.chunks:
@@ -111,6 +121,7 @@ class AnswerService:
                 retrieved=[],
                 usage=TokenUsage(),
                 timings_ms=timings,
+                **provenance,
             )
 
         prompt = build_prompt(question, retrieval.chunks)
@@ -153,6 +164,7 @@ class AnswerService:
             retrieved=retrieval.chunks,
             usage=usage,
             timings_ms=timings,
+            **provenance,
         )
 
     async def _generate(self, prompt: str) -> tuple[AnswerOut, TokenUsage]:

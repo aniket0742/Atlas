@@ -208,12 +208,18 @@ def test_comments_and_blank_lines_are_ignored(tmp_path):
     assert len(load(path)) == 1
 
 
-def test_the_shipped_smoke_dataset_is_valid_and_its_labels_exist():
-    """Guards against a label whose snippet was edited out of the corpus."""
+@pytest.mark.parametrize("name", ["smoke.jsonl", "main.jsonl"])
+def test_shipped_datasets_are_valid_and_their_labels_exist(name):
+    """Guards against a label whose snippet was edited out of the corpus.
+
+    A label that matches nothing scores zero forever and is indistinguishable
+    from a retrieval failure, so editing the corpus without updating the dataset
+    must fail here rather than quietly degrade the numbers.
+    """
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
-    queries = load(root / "eval" / "datasets" / "smoke.jsonl")
+    queries = load(root / "eval" / "datasets" / name)
     assert len(queries) >= 15
     assert any(not q.answerable for q in queries), "need unanswerable queries to score refusal"
 
@@ -223,3 +229,55 @@ def test_the_shipped_smoke_dataset_is_valid_and_its_labels_exist():
             assert label.matches(label.document, text), (
                 f"{query.id}: snippet {label.contains!r} is not in {label.document}"
             )
+
+
+def test_main_dataset_classifies_every_query():
+    """Per-kind metric breakdowns are meaningless if queries are unclassified."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    queries = load(root / "eval" / "datasets" / "main.jsonl")
+    unclassified = [q.id for q in queries if q.kind == "unclassified"]
+    assert not unclassified, f"unclassified queries: {unclassified}"
+    assert sum(not q.answerable for q in queries) >= 10, (
+        "too few unanswerable queries to measure refusal behaviour"
+    )
+
+
+def test_paired_bootstrap_detects_a_consistent_small_difference():
+    """The reason paired testing exists.
+
+    Every query improves by exactly 0.1, but query difficulty varies hugely.
+    Independent intervals would be dominated by that spread and overlap; the
+    paired interval sees a constant difference and excludes zero.
+    """
+    baseline = [0.1, 0.9, 0.2, 0.8, 0.3, 0.7, 0.15, 0.85, 0.25, 0.75]
+    candidate = [b + 0.1 for b in baseline]
+
+    delta, (low, high) = metrics.paired_bootstrap_delta(baseline, candidate)
+    assert delta == pytest.approx(0.1)
+    assert low > 0, "a constant improvement must be detected"
+
+    # The unpaired view of the same data cannot tell them apart.
+    assert metrics.bootstrap_ci(baseline)[1] > metrics.bootstrap_ci(candidate)[0]
+
+
+def test_paired_bootstrap_reports_no_difference_for_noise():
+    baseline = [0.5, 0.4, 0.6, 0.55, 0.45, 0.5, 0.6, 0.4]
+    candidate = [0.4, 0.5, 0.55, 0.6, 0.5, 0.45, 0.4, 0.6]
+    delta, (low, high) = metrics.paired_bootstrap_delta(baseline, candidate)
+    assert low <= 0 <= high, "noise must not be reported as a difference"
+
+
+def test_paired_bootstrap_is_deterministic_and_signed():
+    a = [0.2, 0.4, 0.6]
+    b = [0.3, 0.5, 0.7]
+    assert metrics.paired_bootstrap_delta(a, b) == metrics.paired_bootstrap_delta(a, b)
+    up, _ = metrics.paired_bootstrap_delta(a, b)
+    down, _ = metrics.paired_bootstrap_delta(b, a)
+    assert up == pytest.approx(-down)
+
+
+def test_paired_bootstrap_rejects_misaligned_inputs():
+    with pytest.raises(ValueError, match="align"):
+        metrics.paired_bootstrap_delta([0.1, 0.2], [0.1])

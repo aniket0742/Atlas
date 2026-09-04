@@ -1,0 +1,3685 @@
+{
+  "label": "hybrid+rerank-k1",
+  "created_at": "2026-09-03T23:49:09.667216+00:00",
+  "dataset": {
+    "path": "eval\\datasets\\main.jsonl",
+    "queries": 112,
+    "answerable": 100,
+    "unanswerable": 12
+  },
+  "config": {
+    "k": 1,
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "llm_model": null,
+    "chunk_target_tokens": 320,
+    "chunk_overlap_tokens": 64,
+    "chunk_min_tokens": 32,
+    "min_similarity": 0.6,
+    "retrieval": "hybrid",
+    "retrieval_candidates": 30,
+    "rrf_k": 60,
+    "rerank": true,
+    "rerank_model": "Xenova/ms-marco-MiniLM-L-6-v2",
+    "rerank_candidates": 30,
+    "python": "3.11.4"
+  },
+  "summary": {
+    "recall_at_k": {
+      "mean": 0.85,
+      "ci95": [
+        0.785,
+        0.91
+      ]
+    },
+    "precision_at_k": {
+      "mean": 0.87,
+      "ci95": [
+        0.81,
+        0.93
+      ]
+    },
+    "mrr": {
+      "mean": 0.87,
+      "ci95": [
+        0.81,
+        0.93
+      ]
+    },
+    "ndcg_at_k": {
+      "mean": 0.87,
+      "ci95": [
+        0.81,
+        0.93
+      ]
+    },
+    "by_kind": {
+      "conceptual": {
+        "n": 13,
+        "recall_at_k": 0.8462,
+        "mrr": 0.8462,
+        "ndcg_at_k": 0.8462
+      },
+      "distractor": {
+        "n": 2,
+        "recall_at_k": 1.0,
+        "mrr": 1.0,
+        "ndcg_at_k": 1.0
+      },
+      "identifier": {
+        "n": 13,
+        "recall_at_k": 0.9231,
+        "mrr": 0.9231,
+        "ndcg_at_k": 0.9231
+      },
+      "lookup": {
+        "n": 36,
+        "recall_at_k": 0.9167,
+        "mrr": 0.9167,
+        "ndcg_at_k": 0.9167
+      },
+      "multi-doc": {
+        "n": 5,
+        "recall_at_k": 0.4,
+        "mrr": 0.8,
+        "ndcg_at_k": 0.8
+      },
+      "paraphrase": {
+        "n": 31,
+        "recall_at_k": 0.8065,
+        "mrr": 0.8065,
+        "ndcg_at_k": 0.8065
+      }
+    }
+  },
+  "wall_seconds": 85.6,
+  "queries": [
+    {
+      "query_id": "refund-window",
+      "question": "How long do customers have to request a refund?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "refund-window",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 9.2859,
+          "heading_path": [
+            "Billing and Refunds",
+            "Refund window"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "refund-settle-time",
+      "question": "How long does a refund take to appear on the customer's card?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "refund-settle-time",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 4.6603,
+          "heading_path": [
+            "Billing and Refunds",
+            "Refund window"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "annual-proration",
+      "question": "If someone cancels an annual plan halfway through, what do they get back?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "annual-proration",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 0.8208,
+          "heading_path": [
+            "Billing and Refunds",
+            "Annual plans"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "failed-payment-grace",
+      "question": "What happens to an account after a payment fails repeatedly?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "failed-payment-grace",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 4.8155,
+          "heading_path": [
+            "Billing and Refunds",
+            "Failed payments"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "chargeback-consequence",
+      "question": "What happens if a customer disputes a charge with their bank instead of contacting us?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "chargeback-consequence",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": -0.9636,
+          "heading_path": [
+            "Billing and Refunds",
+            "Chargebacks"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "access-token-lifetime",
+      "question": "How long is an access token valid?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "access-token-lifetime",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/authentication.md",
+          "score": 9.0352,
+          "heading_path": [
+            "Authentication",
+            "Token lifetime"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "refresh-token-reuse",
+      "question": "What happens if an old refresh token is presented again?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "refresh-token-reuse",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/authentication.md",
+          "score": 2.2842,
+          "heading_path": [
+            "Authentication",
+            "Token lifetime"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "revocation-delay",
+      "question": "After we revoke a session, can the user still make API calls?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "revocation-delay",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/authentication.md",
+          "score": -2.6716,
+          "heading_path": [
+            "Authentication",
+            "Session revocation"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "service-account-scope",
+      "question": "Can a service account access more than one tenant?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "service-account-scope",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/authentication.md",
+          "score": 5.646,
+          "heading_path": [
+            "Authentication",
+            "Service accounts"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "rollback-after-migration",
+      "question": "Why can't we just roll back a release that included a schema change?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "rollback-after-migration",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/database-migrations.md",
+          "score": 8.7364,
+          "heading_path": [
+            "Database Migrations",
+            "Forward only"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "release-days",
+      "question": "Which days do we normally ship?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "release-days",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "security/vulnerability-disclosure.md",
+          "score": -0.7759,
+          "heading_path": [
+            "Vulnerability Disclosure",
+            "Disclosure"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "audit-log-retention",
+      "question": "How long do we keep audit logs, and why that long?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "audit-log-retention",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/data-retention.md",
+          "score": 7.7761,
+          "heading_path": [
+            "Data Retention",
+            "Logs"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "retention-after-closure",
+      "question": "If a customer closes their account, how long until their data is gone?",
+      "answerable": true,
+      "kind": "distractor",
+      "scores": {
+        "query_id": "retention-after-closure",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/data-retention.md",
+          "score": 5.8065,
+          "heading_path": [
+            "Data Retention",
+            "Customer data"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "priority-response-target",
+      "question": "What response time do Priority customers get?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "priority-response-target",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/support.md",
+          "score": 5.1046,
+          "heading_path": [
+            "Support Policy",
+            "Response targets"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "escalation-criteria",
+      "question": "When does support hand a ticket to engineering?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "escalation-criteria",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/support.md",
+          "score": 1.8416,
+          "heading_path": [
+            "Support Policy",
+            "Escalation"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "downgrade-and-closure-retention",
+      "question": "How does data retention differ between an account that was downgraded for non-payment and one that was closed?",
+      "answerable": true,
+      "kind": "multi-doc",
+      "scores": {
+        "query_id": "downgrade-and-closure-retention",
+        "recall_at_k": 0.5,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 2,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 1.9401,
+          "heading_path": [
+            "Billing and Refunds",
+            "Failed payments"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "unanswerable-vacation",
+      "question": "How many vacation days do employees get?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "security/vulnerability-disclosure.md",
+          "score": -6.2093,
+          "heading_path": [
+            "Vulnerability Disclosure",
+            "Response targets"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "unanswerable-pricing",
+      "question": "How much does the Enterprise plan cost per seat?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/rate-limits.md",
+          "score": -9.9968,
+          "heading_path": [
+            "Rate Limits",
+            "Default limits"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "unanswerable-sso",
+      "question": "Do we support SAML single sign-on?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/acceptable-use.md",
+          "score": -10.383,
+          "heading_path": [
+            "Acceptable Use",
+            "Resource limits"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "enterprise-refund-window",
+      "question": "Does the 30 day refund window apply to enterprise contracts too?",
+      "answerable": true,
+      "kind": "distractor",
+      "scores": {
+        "query_id": "enterprise-refund-window",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/refunds-enterprise.md",
+          "score": 6.6026,
+          "heading_path": [
+            "Enterprise Refunds and Credits",
+            "Refund window"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "enterprise-refund-approval",
+      "question": "Who has to sign off on a large enterprise refund?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "enterprise-refund-approval",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/refunds-enterprise.md",
+          "score": 2.8337,
+          "heading_path": [
+            "Enterprise Refunds and Credits",
+            "Approval"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "seat-downgrade",
+      "question": "If a customer reduces their seat count mid-contract do they get money back?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "seat-downgrade",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/refunds-enterprise.md",
+          "score": 1.7596,
+          "heading_path": [
+            "Enterprise Refunds and Credits",
+            "Mid-term downgrades"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "enterprise-uptime",
+      "question": "What uptime do we commit to for Enterprise customers?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "enterprise-uptime",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/sla.md",
+          "score": 5.3224,
+          "heading_path": [
+            "Service Level Agreement",
+            "Availability commitment"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "sla-credit-deadline",
+      "question": "How long does a customer have to claim an SLA credit?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "sla-credit-deadline",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/sla.md",
+          "score": -0.1564,
+          "heading_path": [
+            "Service Level Agreement",
+            "Credit schedule"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "maintenance-uptime",
+      "question": "Does planned maintenance count against our uptime number?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "maintenance-uptime",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/sla.md",
+          "score": 4.2149,
+          "heading_path": [
+            "Service Level Agreement",
+            "Exclusions"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "region-change",
+      "question": "Can a customer move their data to a different region later?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "region-change",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/privacy.md",
+          "score": 1.3502,
+          "heading_path": [
+            "Privacy and Data Handling",
+            "Data residency"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "query-retention",
+      "question": "How long do we keep the text of queries people run?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "query-retention",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/privacy.md",
+          "score": 4.7695,
+          "heading_path": [
+            "Privacy and Data Handling",
+            "What we store"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "subprocessor-notice",
+      "question": "How much notice do customers get before a new subprocessor?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "subprocessor-notice",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/privacy.md",
+          "score": 7.0253,
+          "heading_path": [
+            "Privacy and Data Handling",
+            "Subprocessor changes"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "engineer-doc-access",
+      "question": "Can our engineers read customer documents?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "engineer-doc-access",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/privacy.md",
+          "score": 6.119,
+          "heading_path": [
+            "Privacy and Data Handling",
+            "Employee access"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "console-scraping",
+      "question": "Is it OK for a customer to drive the web console with a headless browser?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "console-scraping",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/acceptable-use.md",
+          "score": 5.1287,
+          "heading_path": [
+            "Acceptable Use",
+            "Automated access"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "aup-enforcement",
+      "question": "Do we suspend an account immediately when someone breaks the usage rules?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "aup-enforcement",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/billing.md",
+          "score": 1.4098,
+          "heading_path": [
+            "Billing and Refunds",
+            "Chargebacks"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "tenant-capacity-share",
+      "question": "How much of a shared cluster can one customer use?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "tenant-capacity-share",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/acceptable-use.md",
+          "score": 3.9636,
+          "heading_path": [
+            "Acceptable Use",
+            "Resource limits"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "atl-4022",
+      "question": "What does error ATL-4022 mean?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "atl-4022",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/api-errors.md",
+          "score": 6.0851,
+          "heading_path": [
+            "API Error Codes",
+            "ATL-5002 versus ATL-5004"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "atl-5002-vs-5004",
+      "question": "What is the difference between ATL-5002 and ATL-5004?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "atl-5002-vs-5004",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/api-errors.md",
+          "score": 9.0413,
+          "heading_path": [
+            "API Error Codes",
+            "ATL-5002 versus ATL-5004"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "unsupported-type-code",
+      "question": "Which error code comes back when we cannot parse a document type?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "unsupported-type-code",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/api-errors.md",
+          "score": 1.7764,
+          "heading_path": [
+            "API Error Codes",
+            "Client errors"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "ratelimit-reset-header",
+      "question": "Which response header tells me when my rate limit window resets?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "ratelimit-reset-header",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/rate-limits.md",
+          "score": 8.1701,
+          "heading_path": [
+            "Rate Limits",
+            "Response headers"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "worker-concurrency-default",
+      "question": "What is the default for ATLAS_WORKER_CONCURRENCY?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "worker-concurrency-default",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/environments.md",
+          "score": 6.7869,
+          "heading_path": [
+            "Environments and Configuration",
+            "Configuration keys"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "topk-env-var",
+      "question": "Which environment variable sets how many chunks we retrieve?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "topk-env-var",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/environments.md",
+          "score": 1.4257,
+          "heading_path": [
+            "Environments and Configuration",
+            "Configuration keys"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "request-id-header",
+      "question": "Which header carries the request trace id?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "request-id-header",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/observability.md",
+          "score": 8.7487,
+          "heading_path": [
+            "Observability",
+            "Traces"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "hybrid-flag-name",
+      "question": "What is the feature flag for hybrid search called?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "hybrid-flag-name",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/feature-flags.md",
+          "score": 5.3456,
+          "heading_path": [
+            "Feature Flags",
+            "Naming"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "ratelimit-per-what",
+      "question": "Does issuing more API tokens give a customer more throughput?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "ratelimit-per-what",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/rate-limits.md",
+          "score": 5.7432,
+          "heading_path": [
+            "Rate Limits",
+            "Default limits"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "retry-after",
+      "question": "Should a client use its own backoff or the value we send back?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "retry-after",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/rate-limits.md",
+          "score": 1.3814,
+          "heading_path": [
+            "Rate Limits",
+            "Response headers"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "why-floor",
+      "question": "Why do we discard low scoring chunks instead of passing them to the model?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "why-floor",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/search-architecture.md",
+          "score": -0.3877,
+          "heading_path": [
+            "Search Architecture",
+            "Retrieval pipeline"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "cache-key-tenant",
+      "question": "What goes wrong if a cache key leaves out the tenant?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "cache-key-tenant",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/caching.md",
+          "score": 4.8259,
+          "heading_path": [
+            "Caching",
+            "Cache keys must include the tenant"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "cache-retrieval-config",
+      "question": "Why does the retrieval cache key include the configuration?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "cache-retrieval-config",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/caching.md",
+          "score": 7.8486,
+          "heading_path": [
+            "Caching",
+            "Retrieval config in the key"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "answers-not-cached",
+      "question": "Do we cache generated answers?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "answers-not-cached",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/caching.md",
+          "score": 7.5348,
+          "heading_path": [
+            "Caching",
+            "What is not cached"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "refusal-label",
+      "question": "Why do we break refusals down by reason instead of counting them together?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "refusal-label",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/observability.md",
+          "score": 2.6044,
+          "heading_path": [
+            "Observability",
+            "Why refusals are labelled by reason"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "log-content",
+      "question": "Is it OK to log the text of a chunk when debugging?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "log-content",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/observability.md",
+          "score": 2.1549,
+          "heading_path": [
+            "Observability",
+            "Logs"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "column-default-lock",
+      "question": "What is the risk of adding a column with a default to a large table?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "column-default-lock",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/database-migrations.md",
+          "score": 3.7723,
+          "heading_path": [
+            "Database Migrations",
+            "Locks"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "expand-contract",
+      "question": "How do we make a schema change that would break the running code?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "expand-contract",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/database-migrations.md",
+          "score": 6.6549,
+          "heading_path": [
+            "Database Migrations",
+            "Expand and contract"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "index-concurrently",
+      "question": "How should we add an index to a big table without blocking writes?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "index-concurrently",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/database-migrations.md",
+          "score": 3.9054,
+          "heading_path": [
+            "Database Migrations",
+            "Locks"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "hnsw-filter-gap",
+      "question": "Why might a filtered vector search return fewer results than we asked for?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "hnsw-filter-gap",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/search-architecture.md",
+          "score": 4.0125,
+          "heading_path": [
+            "Search Architecture",
+            "Known limitation: filtered search"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "chunk-section-boundary",
+      "question": "Do chunks ever cross a heading boundary?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "chunk-section-boundary",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/search-architecture.md",
+          "score": 7.7726,
+          "heading_path": [
+            "Search Architecture",
+            "Chunk boundaries"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "flags-vs-config",
+      "question": "Should a tunable number be a feature flag?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "flags-vs-config",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/feature-flags.md",
+          "score": -3.9717,
+          "heading_path": [
+            "Feature Flags",
+            "Lifecycle"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "stale-flags",
+      "question": "Why do we chase feature flags that have been around a long time?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "stale-flags",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/feature-flags.md",
+          "score": -2.5638,
+          "heading_path": [
+            "Feature Flags",
+            "Stale flags"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "secrets-not-env",
+      "question": "Are secrets passed to production as environment variables?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "secrets-not-env",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/environments.md",
+          "score": 8.301,
+          "heading_path": [
+            "Environments and Configuration",
+            "Secrets"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "prod-config-edit",
+      "question": "Can I just change an env var on the production host?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "prod-config-edit",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/environments.md",
+          "score": 0.0312,
+          "heading_path": [
+            "Environments and Configuration",
+            "Changing configuration"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "queue-first-checks",
+      "question": "The ingestion queue is backing up, what do I check first?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "queue-first-checks",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/runbook-queue-backlog.md",
+          "score": -1.4934,
+          "heading_path": [
+            "Runbook: Ingestion Queue Backlog",
+            "Symptom"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "poison-message",
+      "question": "One document keeps failing and retrying, what do I do with it?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "poison-message",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/runbook-queue-backlog.md",
+          "score": 2.2001,
+          "heading_path": [
+            "Runbook: Ingestion Queue Backlog",
+            "Poison messages"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "concurrency-vs-workers",
+      "question": "Should I raise worker concurrency or add more worker processes?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "concurrency-vs-workers",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/runbook-queue-backlog.md",
+          "score": 7.2379,
+          "heading_path": [
+            "Runbook: Ingestion Queue Backlog",
+            "Increasing capacity"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "queue-shedding",
+      "question": "Does a backed up ingestion queue slow down search?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "queue-shedding",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/runbook-queue-backlog.md",
+          "score": -0.9588,
+          "heading_path": [
+            "Runbook: Ingestion Queue Backlog",
+            "Symptom"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "when-failover",
+      "question": "When should we actually fail the database over?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "when-failover",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/runbook-database-failover.md",
+          "score": 7.308,
+          "heading_path": [
+            "Runbook: Database Failover",
+            "When to fail over"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "failover-data-loss",
+      "question": "How much data can we lose if we fail over?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "failover-data-loss",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/runbook-database-failover.md",
+          "score": 1.0591,
+          "heading_path": [
+            "Runbook: Database Failover",
+            "Data loss window"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "old-primary",
+      "question": "Can we bring the old primary back after a failover?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "old-primary",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/runbook-database-failover.md",
+          "score": 7.4505,
+          "heading_path": [
+            "Runbook: Database Failover",
+            "After failover"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "cert-14-days",
+      "question": "We got a certificate expiry warning at 14 days, what does that tell us?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "cert-14-days",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/runbook-cert-expiry.md",
+          "score": 6.6033,
+          "heading_path": [
+            "Runbook: Certificate Expiry",
+            "Automated renewal"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "internal-cert-life",
+      "question": "How long do internal service certificates last?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "internal-cert-life",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/runbook-cert-expiry.md",
+          "score": 8.4906,
+          "heading_path": [
+            "Runbook: Certificate Expiry",
+            "Internal certificates"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "sev1-status-page",
+      "question": "How fast do we have to put something on the status page for a SEV1?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "sev1-status-page",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/incident-response.md",
+          "score": 5.979,
+          "heading_path": [
+            "Incident Response",
+            "Customer communication"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "incident-resolved",
+      "question": "When do we call an incident resolved?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "incident-resolved",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/incident-response.md",
+          "score": 6.8949,
+          "heading_path": [
+            "Incident Response",
+            "Resolution"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "who-declares",
+      "question": "Who is allowed to declare an incident?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "who-declares",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/incident-response.md",
+          "score": 6.1056,
+          "heading_path": [
+            "Incident Response",
+            "Declaring"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "commander-debugging",
+      "question": "Should the incident commander be debugging?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "commander-debugging",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "runbooks/incident-response.md",
+          "score": 6.4479,
+          "heading_path": [
+            "Incident Response",
+            "Roles"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "webhook-delivery",
+      "question": "Are webhooks delivered exactly once?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "webhook-delivery",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/webhooks.md",
+          "score": 2.237,
+          "heading_path": [
+            "Webhooks",
+            "Retries"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "webhook-retries",
+      "question": "What is the retry schedule for a failed webhook?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "webhook-retries",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/webhooks.md",
+          "score": 7.1173,
+          "heading_path": [
+            "Webhooks",
+            "Retries"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "webhook-signature",
+      "question": "Why does my webhook signature check keep failing?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "webhook-signature",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "product/release-notes-2026-q2.md",
+          "score": 3.523,
+          "heading_path": [
+            "Release Notes \u2014 2026 Q2",
+            "v2.6.2 \u2014 18 June 2026"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "webhook-timeout",
+      "question": "How long does my endpoint have to respond to a webhook?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "webhook-timeout",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/webhooks.md",
+          "score": 4.7797,
+          "heading_path": [
+            "Webhooks",
+            "Retries"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "github-issues",
+      "question": "Does the GitHub connector pull in issues and pull requests?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "github-issues",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "product/integrations.md",
+          "score": 7.7361,
+          "heading_path": [
+            "Integrations",
+            "GitHub"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "github-app",
+      "question": "Why do we use a GitHub App rather than a personal access token?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "github-app",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "product/integrations.md",
+          "score": 6.0756,
+          "heading_path": [
+            "Integrations",
+            "GitHub"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "incremental-sync",
+      "question": "What makes an hourly sync affordable?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "incremental-sync",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "product/integrations.md",
+          "score": 7.4257,
+          "heading_path": [
+            "Integrations",
+            "What incremental means"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "sdk-python-version",
+      "question": "What Python version does the SDK need?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "sdk-python-version",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/sdk-python.md",
+          "score": 5.1475,
+          "heading_path": [
+            "Python SDK",
+            "Installation"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "sdk-retries",
+      "question": "Does the SDK retry rate limited requests on its own?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "sdk-retries",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/sdk-python.md",
+          "score": 2.1247,
+          "heading_path": [
+            "Python SDK",
+            "Retries"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "sdk-refused",
+      "question": "How do I tell from the SDK that the system declined to answer?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "sdk-refused",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/sdk-python.md",
+          "score": 2.3493,
+          "heading_path": [
+            "Python SDK",
+            "Querying"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "prod-db-access",
+      "question": "What do I need to get access to the production database?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "prod-db-access",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "onboarding/access-requests.md",
+          "score": 6.1442,
+          "heading_path": [
+            "Access Requests",
+            "Approval"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "elevated-access-duration",
+      "question": "How long does elevated access last before I have to ask again?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "elevated-access-duration",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "onboarding/access-requests.md",
+          "score": 4.9605,
+          "heading_path": [
+            "Access Requests",
+            "Time-bound by default"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "breakglass",
+      "question": "Am I in trouble for using break-glass access?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "breakglass",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "onboarding/access-requests.md",
+          "score": 6.0709,
+          "heading_path": [
+            "Access Requests",
+            "Break-glass"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "access-in-chat",
+      "question": "Can I just ask someone in chat to grant me access?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "access-in-chat",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "onboarding/access-requests.md",
+          "score": 6.2696,
+          "heading_path": [
+            "Access Requests",
+            "How to request"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "committed-secret",
+      "question": "I committed a secret by accident, what is the order of operations?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "committed-secret",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "security/secrets-management.md",
+          "score": -6.3689,
+          "heading_path": [
+            "Secrets Management",
+            "If a secret is committed"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "history-rewrite",
+      "question": "Does rewriting git history fix a leaked credential?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "history-rewrite",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "security/secrets-management.md",
+          "score": -4.0209,
+          "heading_path": [
+            "Secrets Management",
+            "If a secret is committed"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "db-cred-rotation",
+      "question": "How often do database credentials rotate?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "db-cred-rotation",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "security/secrets-management.md",
+          "score": 9.5554,
+          "heading_path": [
+            "Secrets Management",
+            "Rotation"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "dos-testing",
+      "question": "Is denial of service testing allowed under our disclosure policy?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "dos-testing",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "security/vulnerability-disclosure.md",
+          "score": 0.0446,
+          "heading_path": [
+            "Vulnerability Disclosure",
+            "Out of scope"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "critical-fix-target",
+      "question": "How quickly do we have to fix a critical reported vulnerability?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "critical-fix-target",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "security/vulnerability-disclosure.md",
+          "score": -0.6341,
+          "heading_path": [
+            "Vulnerability Disclosure",
+            "Response targets"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "pentest-high",
+      "question": "What was the high severity finding in the last penetration test?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "pentest-high",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "security/pentest-2026.md",
+          "score": -6.2975,
+          "heading_path": [
+            "Penetration Test Summary 2026",
+            "Findings"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "first-week-goal",
+      "question": "What is a new engineer supposed to achieve in their first week?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "first-week-goal",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "onboarding/new-engineer.md",
+          "score": 2.2456,
+          "heading_path": [
+            "New Engineer Onboarding",
+            "Mentor"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "shadow-rotations",
+      "question": "How many rotations do you shadow before going on call?",
+      "answerable": true,
+      "kind": "lookup",
+      "scores": {
+        "query_id": "shadow-rotations",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "onboarding/new-engineer.md",
+          "score": 7.169,
+          "heading_path": [
+            "New Engineer Onboarding",
+            "Shadowing"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "mentor-not-manager",
+      "question": "Why is the onboarding mentor not the person's manager?",
+      "answerable": true,
+      "kind": "conceptual",
+      "scores": {
+        "query_id": "mentor-not-manager",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "onboarding/new-engineer.md",
+          "score": 3.5709,
+          "heading_path": [
+            "New Engineer Onboarding",
+            "Mentor"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "port-5432",
+      "question": "Docker compose fails because port 5432 is already in use, why?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "port-5432",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "onboarding/development-setup.md",
+          "score": 5.3367,
+          "heading_path": [
+            "Development Setup",
+            "Common problems"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "model-redownload",
+      "question": "The embedding model downloads again every time I rebuild, what did I do wrong?",
+      "answerable": true,
+      "kind": "paraphrase",
+      "scores": {
+        "query_id": "model-redownload",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "onboarding/development-setup.md",
+          "score": 5.065,
+          "heading_path": [
+            "Development Setup",
+            "Common problems"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "token-lifetime-release",
+      "question": "Which release cut the access token lifetime?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "token-lifetime-release",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "product/release-notes-2026-q1.md",
+          "score": 3.1616,
+          "heading_path": [
+            "Release Notes \u2014 2026 Q1",
+            "v2.4.0 \u2014 3 March 2026"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "search-endpoint-removed",
+      "question": "When was the old /v1/search endpoint actually removed?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "search-endpoint-removed",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "product/release-notes-2026-q2.md",
+          "score": 4.4034,
+          "heading_path": [
+            "Release Notes \u2014 2026 Q2",
+            "v2.6.0 \u2014 26 May 2026"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "ingestion-202",
+      "question": "What changed about document ingestion in v2.5.0?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "ingestion-202",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "product/release-notes-2026-q2.md",
+          "score": 5.0296,
+          "heading_path": [
+            "Release Notes \u2014 2026 Q2",
+            "v2.5.0 \u2014 12 April 2026"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "windows-backslash-fix",
+      "question": "There was a bug about filenames with backslashes, which release fixed it?",
+      "answerable": true,
+      "kind": "identifier",
+      "scores": {
+        "query_id": "windows-backslash-fix",
+        "recall_at_k": 1.0,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 1,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "product/release-notes-2026-q1.md",
+          "score": 3.3858,
+          "heading_path": [
+            "Release Notes \u2014 2026 Q1",
+            "v2.3.1 \u2014 29 January 2026"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "revocation-and-release",
+      "question": "A revoked session still worked for a while. Is that by design, and did any release change it?",
+      "answerable": true,
+      "kind": "multi-doc",
+      "scores": {
+        "query_id": "revocation-and-release",
+        "recall_at_k": 0.5,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 2,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "product/release-notes-2026-q1.md",
+          "score": 3.388,
+          "heading_path": [
+            "Release Notes \u2014 2026 Q1",
+            "v2.4.1 \u2014 20 March 2026"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "refund-window-by-plan",
+      "question": "What is our refund window, and does it depend on the plan?",
+      "answerable": true,
+      "kind": "multi-doc",
+      "scores": {
+        "query_id": "refund-window-by-plan",
+        "recall_at_k": 0.5,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 2,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/refunds-enterprise.md",
+          "score": 2.5013,
+          "heading_path": [
+            "Enterprise Refunds and Credits",
+            "Refund window"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "retention-privacy-vs-eng",
+      "question": "How long is customer data kept after an account closes, and how does that interact with backups?",
+      "answerable": true,
+      "kind": "multi-doc",
+      "scores": {
+        "query_id": "retention-privacy-vs-eng",
+        "recall_at_k": 0.5,
+        "precision_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "ndcg_at_k": 1.0,
+        "matched": 1,
+        "total_relevant": 2,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/data-retention.md",
+          "score": 6.5789,
+          "heading_path": [
+            "Data Retention",
+            "Customer data"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "ratelimit-error-and-header",
+      "question": "A customer is getting 429s. Which error code is that and what should they do?",
+      "answerable": true,
+      "kind": "multi-doc",
+      "scores": {
+        "query_id": "ratelimit-error-and-header",
+        "recall_at_k": 0.0,
+        "precision_at_k": 0.0,
+        "reciprocal_rank": 0.0,
+        "ndcg_at_k": 0.0,
+        "matched": 0,
+        "total_relevant": 2,
+        "retrieved": 1
+      },
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/sdk-python.md",
+          "score": -1.165,
+          "heading_path": [
+            "Python SDK",
+            "Retries"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "un-parental-leave",
+      "question": "What is our parental leave policy?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "security/vulnerability-disclosure.md",
+          "score": -10.9415,
+          "heading_path": [
+            "Vulnerability Disclosure",
+            "Safe harbour"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "un-cloud-provider",
+      "question": "Which cloud provider do we run on?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/api-errors.md",
+          "score": -9.4256,
+          "heading_path": [
+            "API Error Codes",
+            "ATL-5002 versus ATL-5004"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "un-max-doc-size",
+      "question": "What is the maximum document size a customer can upload?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/acceptable-use.md",
+          "score": -6.123,
+          "heading_path": [
+            "Acceptable Use",
+            "Prohibited content"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "un-bug-bounty",
+      "question": "Do we pay cash rewards for reported vulnerabilities?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "security/vulnerability-disclosure.md",
+          "score": -8.0052,
+          "heading_path": [
+            "Vulnerability Disclosure",
+            "Reporting"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "un-customer-count",
+      "question": "How many customers do we have?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/acceptable-use.md",
+          "score": -6.8517,
+          "heading_path": [
+            "Acceptable Use",
+            "Resource limits"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "un-oncall-pay",
+      "question": "How much extra do engineers get paid for being on call?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "onboarding/new-engineer.md",
+          "score": -8.0661,
+          "heading_path": [
+            "New Engineer Onboarding",
+            "Shadowing"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "un-contract-notice",
+      "question": "How much notice is required to terminate a contract?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/data-retention.md",
+          "score": -4.7866,
+          "heading_path": [
+            "Data Retention",
+            "Logs"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "un-password-reset",
+      "question": "How does a user reset their password?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "engineering/rate-limits.md",
+          "score": -6.9882,
+          "heading_path": [
+            "Rate Limits",
+            "Response headers"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    },
+    {
+      "query_id": "un-free-trial",
+      "question": "Do we offer a free trial?",
+      "answerable": false,
+      "kind": "unanswerable",
+      "scores": null,
+      "retrieved": [
+        {
+          "rank": 0,
+          "document": "policies/acceptable-use.md",
+          "score": -11.1398,
+          "heading_path": [
+            "Acceptable Use",
+            "Resource limits"
+          ]
+        }
+      ],
+      "refused": null,
+      "refusal_reason": null,
+      "citation_count": null,
+      "unverified_quotes": null,
+      "total_tokens": null,
+      "latency_ms": null
+    }
+  ]
+}
