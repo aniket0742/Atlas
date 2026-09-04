@@ -30,8 +30,7 @@ def get_embedder(settings: Settings | None = None) -> EmbeddingProvider:
     return _build_embedder(s.embedding_provider, s.embedding_model, str(s.model_cache_dir))
 
 
-def get_llm(settings: Settings | None = None) -> LLMProvider:
-    s = settings or get_settings()
+def _build_llm(s: Settings, model: str) -> LLMProvider:
     if s.llm_provider == "fake":
         from atlas.providers.fake import FakeLLMProvider
 
@@ -41,11 +40,32 @@ def get_llm(settings: Settings | None = None) -> LLMProvider:
 
     return GeminiProvider(
         api_key=s.gemini_api_key,
-        model=s.llm_model,
+        model=model,
         timeout_seconds=s.llm_timeout_seconds,
         max_output_tokens=s.llm_max_output_tokens,
         temperature=s.llm_temperature,
     )
+
+
+def get_llm(settings: Settings | None = None) -> LLMProvider:
+    """The model that writes the final, cited answer."""
+    s = settings or get_settings()
+    return _build_llm(s, s.llm_model)
+
+
+def get_agent_llm(settings: Settings | None = None) -> LLMProvider:
+    """The model that decides which tools to call.
+
+    A distinct role, not merely a distinct setting. Routing is high-volume and
+    cheap; answering is low-volume and is where quality shows. They also draw on
+    separate free-tier quotas, so splitting them adds headroom instead of
+    competing for one budget.
+
+    One API key covers both: quota is scoped per project per model, verified
+    empirically rather than assumed.
+    """
+    s = settings or get_settings()
+    return _build_llm(s, s.agent_model)
 
 
 @lru_cache(maxsize=4)

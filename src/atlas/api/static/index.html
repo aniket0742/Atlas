@@ -101,8 +101,15 @@
         </label>
         <button id="upload-btn" type="submit">Upload &amp; index</button>
       </form>
-      <p class="hint">Ingestion is synchronous in Phase 1: parsing, chunking and embedding all happen inside this request, so a large file will take a while. Phase 3 moves it to a queue.</p>
+      <p class="hint">Upload returns immediately with a job id; a worker does the indexing. The document is not searchable until its job succeeds.</p>
       <div id="upload-status" class="upload-status" hidden></div>
+    </div>
+
+    <div class="panel">
+      <h2>Ingestion queue</h2>
+      <dl id="queue-stats" class="metrics"><dd class="muted">loading…</dd></dl>
+      <ul id="jobs" class="documents"></ul>
+      <p class="hint">Depth alone cannot tell "busy" from "stuck" — a queue holding steady with work completing is healthy. <em>oldest pending</em> is what separates them.</p>
     </div>
 
     <div class="panel">

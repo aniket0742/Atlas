@@ -24,10 +24,11 @@ from atlas.answer.service import AnswerService
 from atlas.api import schemas
 from atlas.config import Settings, get_settings
 from atlas.core.models import Answer
+from atlas.db import jobs as jobq
 from atlas.db import repository as repo
 from atlas.db.pool import Database
 from atlas.ingest.parsers import UnparseableDocument, UnsupportedDocument
-from atlas.ingest.pipeline import Ingestor, IngestRequest
+from atlas.ingest.pipeline import Ingestor
 from atlas.providers.base import LLMError, LLMTimeout
 from atlas.providers.factory import get_embedder, get_llm, get_reranker
 from atlas.retrieval.service import Retriever
@@ -192,29 +193,37 @@ async def list_sources(db: DbDep, tenant_id: TenantDep) -> list[schemas.SourceSu
 
 @app.post(
     "/v1/documents",
-    response_model=schemas.IngestResponse,
-    status_code=201,
+    response_model=schemas.IngestAcceptedResponse,
+    status_code=202,
     tags=["documents"],
     responses={
-        415: {"model": schemas.ErrorResponse, "description": "Unsupported document type"},
-        422: {"model": schemas.ErrorResponse, "description": "Document could not be parsed"},
+        413: {"model": schemas.ErrorResponse, "description": "Document exceeds the size limit"},
+        422: {"model": schemas.ErrorResponse, "description": "Empty upload"},
     },
 )
 async def ingest_document(
-    request: Request,
+    db: DbDep,
     tenant_id: TenantDep,
     settings: Annotated[Settings, Depends(get_config)],
     file: Annotated[UploadFile, File(description="The document to index.")],
     source: Annotated[str, Form()] = "default",
     external_id: Annotated[str | None, Form()] = None,
     uri: Annotated[str | None, Form()] = None,
-) -> schemas.IngestResponse:
-    """Index a document.
+) -> schemas.IngestAcceptedResponse:
+    """Queue a document for indexing.
 
-    Synchronous in Phase 1: the response is returned after the document is
-    queryable. Phase 3 replaces this with an enqueue that returns 202 and a job
-    id. Both are honest about what has happened, which matters more than which
-    one is used.
+    **This returns 202, not 201.** Phase 1 ran the pipeline inside the request
+    and returned once the document was queryable; Phase 3 enqueues and returns
+    immediately. The document is NOT searchable when this responds -- poll
+    `GET /v1/jobs/{job_id}` or `GET /v1/documents/{document_id}`.
+
+    A deliberate breaking change rather than a new API version: there are no
+    external consumers to protect, and carrying a compatibility shim for a
+    hypothetical one is cost with no beneficiary. See ADR-0023.
+
+    Document-type validation now happens in the worker rather than here, because
+    parsing is part of the work being deferred. A file this endpoint accepts can
+    still fail ingestion; the job carries the error.
     """
     data = await file.read()
     if len(data) > settings.max_upload_bytes:
@@ -225,25 +234,90 @@ async def ingest_document(
     if not data:
         raise HTTPException(status_code=422, detail="Uploaded file is empty.")
 
-    ingestor: Ingestor = request.app.state.ingestor
-    result = await ingestor.ingest(
-        tenant_id,
-        IngestRequest(
-            data=data,
-            # Default the stable id to the filename: re-uploading the same
-            # filename updates that document rather than creating a duplicate.
-            external_id=external_id or file.filename or "untitled",
-            source_name=source,
+    resolved_external_id = external_id or file.filename or "untitled"
+
+    # One transaction: the source and the job commit together, so a queued job
+    # can never reference a source that does not exist. This atomicity is the
+    # entire argument for a database-backed queue (ADR-0002).
+    async with db.transaction() as conn:
+        source_id = await repo.ensure_source(conn, tenant_id, source)
+        job_id, document_id = await jobq.enqueue(
+            conn,
+            tenant_id,
+            source_id,
+            external_id=resolved_external_id,
+            payload=data,
             filename=file.filename,
             mime_type=file.content_type,
             uri=uri,
-        ),
+            max_attempts=settings.ingest_max_attempts,
+        )
+
+    return schemas.IngestAcceptedResponse(
+        job_id=job_id,
+        document_id=document_id,
+        external_id=resolved_external_id,
     )
-    return schemas.IngestResponse(
-        document_id=result.document_id,
-        version=result.version,
-        chunk_count=result.chunk_count,
-        changed=result.changed,
+
+
+@app.get("/v1/jobs", response_model=schemas.QueueResponse, tags=["jobs"])
+async def list_jobs(
+    db: DbDep,
+    tenant_id: TenantDep,
+    status: Annotated[str | None, Query(description="pending/running/succeeded/dead")] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> schemas.QueueResponse:
+    """Queue depth and recent jobs."""
+    async with db.connection() as conn:
+        stats = await jobq.queue_stats(conn, tenant_id)
+        rows = await jobq.list_jobs(conn, tenant_id, status=status, limit=limit)
+    return schemas.QueueResponse(
+        stats=schemas.QueueStats(**stats),
+        jobs=[schemas.JobSummary(**row) for row in rows],
+    )
+
+
+@app.get(
+    "/v1/jobs/{job_id}",
+    response_model=schemas.JobSummary,
+    tags=["jobs"],
+    responses={404: {"model": schemas.ErrorResponse}},
+)
+async def get_job(job_id: uuid.UUID, db: DbDep, tenant_id: TenantDep) -> schemas.JobSummary:
+    async with db.connection() as conn:
+        row = await jobq.get_job(conn, tenant_id, job_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return schemas.JobSummary(
+        **{k: v for k, v in row.items() if k in schemas.JobSummary.model_fields}
+    )
+
+
+@app.post(
+    "/v1/jobs/{job_id}/requeue",
+    response_model=schemas.JobSummary,
+    tags=["jobs"],
+    responses={404: {"model": schemas.ErrorResponse}, 409: {"model": schemas.ErrorResponse}},
+)
+async def requeue_job(job_id: uuid.UUID, db: DbDep, tenant_id: TenantDep) -> schemas.JobSummary:
+    """Return a dead-letter job to the queue.
+
+    Manual on purpose. A dead job already failed its full attempt budget, so
+    automatic requeueing would reproduce the failure; this is for after the cause
+    has been fixed.
+    """
+    async with db.transaction() as conn:
+        ok = await jobq.requeue_dead(conn, tenant_id, job_id)
+        row = await jobq.get_job(conn, tenant_id, job_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not ok:
+        raise HTTPException(
+            status_code=409,
+            detail="Only dead jobs that still hold their payload can be requeued.",
+        )
+    return schemas.JobSummary(
+        **{k: v for k, v in row.items() if k in schemas.JobSummary.model_fields}
     )
 
 

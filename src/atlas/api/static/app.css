@@ -220,3 +220,20 @@ select {
 .chip-dense  { border-color: var(--accent); }
 .chip-lexical { border-color: var(--ok); }
 .chip-rerank { border-color: var(--warn); }
+
+/* ── ingestion queue ─────────────────────────────────────────────────── */
+
+.status-pending   { background: var(--warn-bg); color: var(--warn); }
+.status-running   { background: var(--bg); color: var(--accent); border: 1px solid var(--accent); }
+.status-succeeded { background: var(--ok-bg); color: var(--ok); }
+.status-dead      { background: var(--bad-bg); color: var(--bad); }
+
+.job-error {
+  font: 10px/1.4 var(--mono); color: var(--bad);
+  margin: 2px 0 0; word-break: break-word;
+}
+.requeue {
+  margin: 4px 0 0 0; padding: 2px 8px; font-size: 11px;
+  background: none; border: 1px solid var(--line); color: var(--accent);
+  border-radius: 4px; cursor: pointer;
+}

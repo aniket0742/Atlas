@@ -30,7 +30,16 @@ class Settings(BaseSettings):
     llm_provider: Literal["gemini", "fake"] = "gemini"
     llm_model: str = "gemini-2.5-flash"
     llm_timeout_seconds: float = 60.0
-    llm_max_output_tokens: int = 2048
+    # 8192, not 2048. The response schema's size scales with the number of
+    # citations times quote length: top_k citations each carrying a verbatim
+    # quote can far exceed a 2k budget. When it does, the model is truncated
+    # mid-JSON, nothing parses, and the whole answer is lost -- observed
+    # intermittently during the first real --with-answers run.
+    #
+    # This is a ceiling, not a reservation: unused budget costs nothing, so a
+    # generous value is free insurance against a failure mode that destroys the
+    # entire response rather than degrading it.
+    llm_max_output_tokens: int = 8192
     # Grounded answering is an extraction task, not a creative one.
     llm_temperature: float = 0.0
 
@@ -70,6 +79,48 @@ class Settings(BaseSettings):
     # Cross-encoder cost is linear in this number, so it is the main latency
     # dial. Measured in experiment E6.
     rerank_candidates: int = 30
+
+    # --- Evaluation -------------------------------------------------------
+    # Eval queries run concurrently. Bounded rather than unlimited because
+    # retrieval embeds and reranks on the local CPU, so past a point this trades
+    # throughput for contention. Set to 1 to reproduce the old serial behaviour,
+    # or lower it if running against a rate-limited free-tier key.
+    eval_concurrency: int = 8
+
+    # --- Agent (Phase 4) --------------------------------------------------
+    # A separate model role for tool-routing turns. Free-tier quota is scoped
+    # per project PER MODEL (quotaId GenerateRequestsPerMinutePerProjectPerModel),
+    # verified by exhausting one model and finding another still served on the
+    # same key -- so splitting roles adds throughput rather than sharing it.
+    #
+    # Measured on this project: gemini-3.5-flash 5 RPM, the flash-lite models 15
+    # RPM. Those are observations, not guarantees; Google states limits vary by
+    # project and standing, and the reported quotaValue was not even stable
+    # across our own runs. Sustained throughput is often latency-bound anyway.
+    #
+    # The final-answer model is deliberately NOT changed: answer quality is the
+    # product, and routing is the cheap, high-volume role.
+    # gemini-3.1-flash-lite over gemini-3.5-flash-lite: both scored 8/8 on tool
+    # selection with 0 unnecessary searches and reached every needed document on
+    # the multi-document cases, so quality did not separate them. Latency did --
+    # 2.7s mean against 12.4s, with no quota waiting in either run. See
+    # scripts/validate_agent_model.py and ADR-0024.
+    agent_model: str = "gemini-3.1-flash-lite"
+
+    # --- Ingestion workers ------------------------------------------------
+    # Jobs claimed and run concurrently per worker process. Embedding releases
+    # the GIL inside ONNX Runtime so these overlap, but beyond the core count
+    # they contend rather than speed up.
+    worker_concurrency: int = 4
+    worker_poll_interval_seconds: float = 1.0
+    # How long a claimed job may stay `running` before the reaper assumes its
+    # worker died. Must exceed the slowest plausible document; a 200-page PDF
+    # embedding on CPU can take minutes.
+    worker_lease_seconds: int = 300
+    worker_reap_interval_seconds: float = 60.0
+    # Attempts per job before it moves to the dead-letter state. Counted at
+    # claim time, so a job that crashes its worker still consumes budget.
+    ingest_max_attempts: int = 4
 
     # --- Refusal ----------------------------------------------------------
     # Interim permissive setting, NOT a validated optimum. The 0.60 calibrated

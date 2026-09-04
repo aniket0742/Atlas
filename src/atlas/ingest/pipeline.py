@@ -50,7 +50,20 @@ class Ingestor:
         self._embedder = embedder
         self._settings = settings
 
-    async def ingest(self, tenant_id: uuid.UUID, request: IngestRequest) -> IngestResult:
+    async def ingest(
+        self,
+        tenant_id: uuid.UUID,
+        request: IngestRequest,
+        *,
+        source_id: uuid.UUID | None = None,
+    ) -> IngestResult:
+        """Run the full pipeline for one document.
+
+        `source_id` lets a caller that already resolved the source skip the
+        lookup -- the worker knows it from the job row. Callers that only have a
+        name (the CLI, a direct upload) leave it None and the source is created
+        on demand.
+        """
         timings: dict[str, float] = {}
 
         t0 = time.perf_counter()
@@ -67,7 +80,8 @@ class Ingestor:
         # Reserve the version first, in its own transaction, so the unchanged
         # case does no further work and holds no locks while embedding runs.
         async with self._db.transaction() as conn:
-            source_id = await repo.ensure_source(conn, tenant_id, request.source_name)
+            if source_id is None:
+                source_id = await repo.ensure_source(conn, tenant_id, request.source_name)
             document_id, version, changed = await repo.begin_document_version(
                 conn, tenant_id, source_id, parsed
             )

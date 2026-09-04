@@ -40,6 +40,45 @@ services:
       sh -c "atlas migrate &&
              uvicorn atlas.api.app:app --host 0.0.0.0 --port 8000"
 
+  worker:
+    # Same image as the API, different entry point. Ingestion is CPU-bound on
+    # embedding while the API is mostly waiting on the model provider, so
+    # separating them means a large upload cannot starve query traffic -- which
+    # is the operational reason for the queue, beyond just not blocking the
+    # request.
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ATLAS_DATABASE_URL: postgresql://atlas:atlas@postgres:5432/atlas
+      ATLAS_MODEL_CACHE_DIR: /models
+    volumes:
+      # Shares the model volume with the API so the embedding model is
+      # downloaded once, not once per service.
+      - atlas_models:/models
+      - ./src:/app/src
+      - ./eval:/app/eval:ro
+    # No migrate here: the API service owns schema application, and two
+    # containers racing to apply migrations on startup is a needless hazard.
+    command: ["atlas", "worker"]
+    # The image's HEALTHCHECK probes http://localhost:8000/health, which exists
+    # only in the API. Inheriting it here would mark a perfectly healthy worker
+    # unhealthy forever. Disabled rather than faked: liveness for the worker is
+    # visible in queue depth and oldest-pending age, which is the signal that
+    # actually matters.
+    healthcheck:
+      disable: true
+    # SIGTERM lets the worker finish the job in flight before exiting. Killing
+    # it mid-job is survivable -- the lease expires and the reaper requeues --
+    # but it wastes the embedding work already done.
+    stop_signal: SIGTERM
+    stop_grace_period: 60s
+    restart: unless-stopped
+
   postgres:
     # pgvector ships prebuilt images tracking upstream Postgres releases.
     # Pinned by digest-less tag on purpose: we want patch updates, not major ones.

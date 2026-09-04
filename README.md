@@ -3,11 +3,13 @@
 A retrieval platform that answers questions about an organisation's own
 documents, with citations, and refuses when the answer is not in the corpus.
 
-**Status: Phase 2 complete.** Lexical retrieval, hybrid fusion and cross-encoder
-reranking are implemented and measured against a recorded baseline. Two of the
-three were **not adopted**, because measurement said they did not help — the
-reasoning and the numbers are in [`docs/evaluation.md`](docs/evaluation.md) and
-[`Decision.md`](Decision.md). Every number below was measured on this machine.
+**Status: Phase 3 complete.** Ingestion is asynchronous: uploads enqueue a job
+in the same transaction that records them, a separate worker drains the queue,
+and failures retry with backoff before landing in a dead-letter state. Phase 2's
+retrieval work is measured rather than assumed — two of its three techniques were
+implemented and then **not adopted**, because the numbers said they did not help.
+Reasoning in [`Decision.md`](Decision.md), numbers in
+[`docs/evaluation.md`](docs/evaluation.md).
 
 ---
 
@@ -49,10 +51,12 @@ Reasoning for these and every other significant choice is in
 ## Architecture
 
 ```text
-             ┌──────────────┐
-  documents  │ Ingestion    │   parse → normalise → chunk → embed → index
-  ──────────▶│ pipeline     │   (synchronous in Phase 1; queued in Phase 3)
-             └──────┬───────┘
+             ┌──────────────┐         ┌──────────────┐
+  documents  │ POST /v1/    │  job    │ Worker       │  parse → normalise →
+  ──────────▶│ documents    │────────▶│ (own process)│  chunk → embed → index
+             │ → 202 + id   │  queue  │ retry / DLQ  │
+             └──────┬───────┘         └──────┬───────┘
+                    │  enqueue and document write share one transaction
                     │
              ┌──────▼─────────────────────────────────┐
              │ PostgreSQL 16 + pgvector               │
@@ -100,7 +104,8 @@ for why Kafka was considered and rejected.
 | Reranking | `Xenova/ms-marco-MiniLM-L-6-v2` cross-encoder, local | the one change measured to beat the baseline ([ADR-0020](Decision.md)) |
 | Generation | Google Gemini free tier, behind a `Protocol` | no paid dependency; swappable ([ADR-0008](Decision.md)) |
 | UI | plain HTML/CSS/JS served by FastAPI | same-origin, no build step, no npm ([ADR-0015](Decision.md)) |
-| Local env | Docker Compose (api + postgres + redis) | one command starts everything ([ADR-0016](Decision.md)) |
+| Queue | Postgres `SELECT ... FOR UPDATE SKIP LOCKED` | enqueue shares a transaction with the write; no broker ([ADR-0002](Decision.md), [ADR-0022](Decision.md)) |
+| Local env | Docker Compose (api + worker + postgres + redis) | one command starts everything ([ADR-0016](Decision.md)) |
 | Tests | pytest | 76 unit tests run with no database and no API key |
 
 ## Running it locally
@@ -198,11 +203,14 @@ ingestion is, so the upload panel states what it is doing while it waits.
 |---|---|---|
 | `GET` | `/health` | liveness, database reachability, active models |
 | `GET` | `/v1/stats` | document / chunk / embedding counts for the tenant |
-| `POST` | `/v1/documents` | upload and index a document (multipart) |
+| `POST` | `/v1/documents` | queue a document for indexing (multipart) — returns **202** |
 | `GET` | `/v1/documents` | list indexed documents |
 | `GET` | `/v1/documents/{id}` | document detail, including failure reason |
 | `GET` | `/v1/sources` | configured sources and their document counts |
 | `POST` | `/v1/query` | ask a question; returns answer, citations, usage, timings |
+| `GET` | `/v1/jobs` | queue depth and recent ingestion jobs |
+| `GET` | `/v1/jobs/{id}` | one job's status, attempts and error |
+| `POST` | `/v1/jobs/{id}/requeue` | return a dead-letter job to the queue |
 
 `POST /v1/query` returns per-stage timings and token usage on every response, so
 the numbers Phase 6 (observability) and Phase 8 (evaluation) need are available
@@ -213,9 +221,41 @@ curl -s localhost:8000/v1/query -H 'content-type: application/json' \
   -d '{"question":"What happens after a chargeback?","include_evidence":true}'
 ```
 
-Error codes are meaningful: `415` unsupported document type, `422` document could
-not be parsed, `502` the model provider failed, `504` the model provider timed
-out. Atlas being healthy while its upstream is not is a distinct condition.
+**`POST /v1/documents` returns 202, not 201.** The document is queued, not
+indexed — it is *not* searchable when the response arrives. Poll
+`GET /v1/jobs/{job_id}`. This is a deliberate unversioned break; the reasoning is
+in [ADR-0023](Decision.md). One consequence: document-type validation moved into
+the worker, so a file this endpoint accepts can still fail, surfacing as a
+dead-lettered job rather than a 415.
+
+Error codes are meaningful: `413` too large, `422` empty upload, `502` the model
+provider failed, `504` the model provider timed out. Atlas being healthy while
+its upstream is not is a distinct condition.
+
+## Ingestion
+
+```bash
+docker compose up -d          # starts a worker alongside the API
+atlas jobs                    # queue depth and recent jobs
+atlas worker --once           # drain the queue in the foreground, then exit
+```
+
+Uploads enqueue a job **in the same transaction that creates the source**, which
+is the property a message broker cannot provide without an outbox table — and an
+outbox table is a Postgres queue with an extra hop ([ADR-0002](Decision.md)).
+
+Reliability behaviour, all covered by tests:
+
+- **Concurrent workers never claim the same job** (`SKIP LOCKED`).
+- **A crashed worker loses no work.** Jobs carry a lease; a reaper returns
+  expired ones to the queue. Attempts are counted at *claim* time, so a document
+  that reliably kills workers exhausts its budget instead of cycling forever.
+- **Retries back off exponentially with jitter**, then land in a dead-letter
+  state that **keeps its payload** so it can be requeued once the cause is fixed.
+- **Unparseable documents are not retried** — the same bytes fail identically, so
+  retrying only burns the budget and delays the real error.
+- **Duplicate delivery is safe.** Deterministic ids plus the content-hash
+  short-circuit make reprocessing converge rather than duplicate.
 
 ## Evaluation
 
@@ -262,7 +302,9 @@ That is the intended outcome of measuring rather than assuming.
 
 ```bash
 pytest                          # 72 unit tests, no database or API key needed
-docker compose up -d && pytest -m integration   # 12 more against real Postgres
+# Integration tests need a database no live worker is polling: jobs.claim() is
+# global by design, so a running worker competes with the tests for their jobs.
+docker compose up -d && docker compose stop worker && pytest -m integration
 ```
 
 The integration tests cover the properties that are hard to reason about without
@@ -274,9 +316,6 @@ empty corpus.
 
 Current, and honest:
 
-- **Ingestion is synchronous.** A large PDF blocks its own request. No retry —
-  a failed document is marked `failed` with its error and must be resubmitted.
-  ([ADR-0012](Decision.md))
 - **Chunking is unvalidated.** Structure-aware chunking is implemented and its
   invariants are tested, but whether it beats fixed-size chunking on this corpus
   has not been measured. Marked `provisional`. ([ADR-0009](Decision.md))
@@ -314,7 +353,7 @@ Current, and honest:
 |---|---|---|
 | 1 | End-to-end RAG, citations, tenancy in schema, **eval harness** | complete, E1+E2 run |
 | 2 | Lexical + hybrid + reranking, measured against the Phase 1 baseline | complete — reranking adopted, hybrid rejected |
-| 3 | Postgres job queue, workers, retries, DLQ, incremental re-crawl | planned |
+| 3 | Postgres job queue, workers, retries, DLQ, failure injection | complete |
 | 4 | Tool use: knowledge base, GitHub diffs, fixed metadata queries | planned |
 | 5 | AuthN/AuthZ, RBAC, rate limiting, filtered-recall fix for HNSW | planned |
 | 6 | OpenTelemetry, Prometheus, caching, embedding throughput | planned |

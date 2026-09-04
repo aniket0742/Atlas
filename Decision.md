@@ -58,9 +58,10 @@ numbers rather than by feel.
 
 ---
 
-## ADR-0002: No Kafka. A queue is deferred, and will probably be Postgres
+## ADR-0002: No Kafka. The queue is Postgres
 
-**Status:** deferred (revisit in Phase 3)
+**Status:** accepted (Phase 3) — was `deferred`; implemented as described, see
+ADR-0022
 
 **Problem.** The original architecture put Kafka between the ingestion API and
 the processing workers.
@@ -77,8 +78,9 @@ the processing workers.
   enqueue in the same transaction as the document write. Queue depth is a
   `COUNT(*)`. DLQ is a status column. No new infrastructure.
 
-**Decision.** Phase 1 ingests synchronously. Phase 3 introduces a Postgres job
-table, not Kafka.
+**Decision.** Phase 1 ingested synchronously. Phase 3 introduced a Postgres job
+table, not Kafka. This is now built and running; ADR-0022 covers the details of
+the implementation and what it cost.
 
 **Why.** Kafka earns its complexity at throughput and fan-out this system does
 not have: one developer, a corpus measured in thousands of documents, one
@@ -436,7 +438,9 @@ needed to discriminate between close configurations.
 
 ## ADR-0012: Phase 1 ingests synchronously, and says so
 
-**Status:** accepted (Phase 1), superseded in Phase 3
+**Status:** superseded (Phase 3) by ADR-0022 and ADR-0023. Retained because the
+reasoning for starting synchronously, and the two properties that made the move
+cheap, are the argument for how Phase 3 went.
 
 **Decision.** `POST /v1/documents` runs the full pipeline in the request and
 returns 201 once the document is queryable.
@@ -868,3 +872,134 @@ error, not the generalisation problem.
 correction for multiple comparisons, becomes worthwhile — the current sweep tests
 several configurations against one baseline without any such correction, which is
 a real if minor weakness.
+
+---
+
+## ADR-0022: The ingestion queue is a Postgres table
+
+**Status:** accepted (Phase 3) — realises the decision deferred in ADR-0002
+
+**Problem.** Ingestion ran inside the HTTP request. A large PDF blocked its
+caller for the duration, a failure had no retry, and query traffic competed with
+embedding for the same process.
+
+**Decision.** An `ingest_jobs` table claimed with
+`SELECT ... FOR UPDATE SKIP LOCKED`, drained by a separate worker process. No
+Kafka, no Redis Streams — the reasoning is in ADR-0002 and has not changed.
+
+The property that justifies it, concretely: `POST /v1/documents` creates the
+source and the job **in one transaction**. A broker cannot participate in that
+transaction, so it needs an outbox table to avoid "job queued, source missing"
+after a crash — and an outbox table *is* a Postgres queue with an extra hop
+behind it.
+
+### Where the uploaded bytes live
+
+In the job row, as `bytea`. Postgres TOASTs and compresses anything past ~2KB
+and stores it out of line, so a 20MB upload does not sit in the main heap.
+
+The alternative — write to object storage, reference a key — introduces a second
+place the payload can disagree with the job after a crash, and adds
+infrastructure this system does not otherwise need.
+
+The payload is cleared **when a job succeeds** and **retained when a job dies**.
+That asymmetry is deliberate: a dead-letter queue whose entries cannot be
+replayed is not a dead-letter queue. Its whole purpose is to fix the cause and
+requeue, which needs the bytes. Storage is bounded by how many jobs are dead, and
+if that number is large enough to matter it is itself the signal.
+
+### Attempts are counted at claim time, not at completion
+
+A job that crashes its worker never reaches a completion handler. If attempts
+were counted there, a document that reliably kills workers would cycle forever:
+claim, crash, lease expires, requeue, claim. Counting at claim means such a job
+exhausts its budget and reaches the dead-letter state, which is what an operator
+needs to see. There is a test for exactly this.
+
+### Leases, not heartbeats
+
+A claimed job carries `locked_at`; a reaper returns rows whose lease has expired
+to `pending`. Heartbeating would detect a dead worker faster, at the cost of a
+write per job per interval and a liveness protocol to get wrong. A 300-second
+lease means a crash costs up to five minutes of delay on one document, which is
+an acceptable trade at this scale — and the lease must exceed the slowest
+plausible document, because a worker still legitimately embedding a 200-page PDF
+must not have its job stolen.
+
+### Three transactions per job
+
+Claim commits immediately; the work runs holding no transaction; completion is a
+third. Holding the claim transaction across the work would keep a row lock for
+the tens of seconds a large document takes to embed, block the reaper, and pin a
+connection from a small pool. The lease exists precisely so the claim can commit
+and the work proceed unlocked.
+
+### Duplicate suppression
+
+A partial unique index over `pending` rows means re-uploading a document while an
+earlier upload is still queued **replaces** that job rather than adding a second.
+A job already `running` cannot be superseded — a worker holds it — so that case
+falls through to the pipeline's content-hash short-circuit, which makes the
+duplicate nearly free. Suppression is an optimisation; correctness under
+duplicate delivery comes from the deterministic ids built in Phase 1.
+
+**Trade-offs.** The queue competes with query traffic for connections and
+generates table churn that autovacuum must keep up with. It does not offer replay
+of historical events. Polling costs up to one poll interval of latency before a
+job starts; `LISTEN/NOTIFY` would remove that but needs a dedicated connection
+per worker and a fallback poll anyway, and one second is not the bottleneck when
+ingesting a document takes far longer.
+
+**Reconsider if.** Sustained ingestion exceeds roughly 10^3 jobs/second, a second
+independent consumer needs the same stream, or payload sizes make in-row storage
+untenable. Redis Streams remains the next step before Kafka.
+
+---
+
+## ADR-0023: `POST /v1/documents` returns 202, and the break is not versioned
+
+**Status:** accepted (Phase 3)
+
+**Problem.** The endpoint returned 201 once a document was queryable. With
+ingestion behind a queue it can only return "accepted"; the document is not
+searchable when the response is written.
+
+**Alternatives considered.**
+
+- *Keep 201 and block until the job finishes.* Preserves the contract and
+  discards the entire benefit of the queue.
+- *Add `/v2/documents` and keep `/v1` synchronous.* Two ingestion paths to
+  maintain and test, one of which exists for callers that do not exist.
+- *A `?wait=true` parameter.* Same problem in a smaller package, and it makes
+  request duration unbounded and dependent on queue depth.
+- *Change `/v1` and accept the break.*
+
+**Decision.** `POST /v1/documents` now returns **202 Accepted** with a `job_id`
+and a `document_id`. No `/v2`.
+
+**Why not version it.** There are no external consumers. A compatibility shim
+would be cost paid now for a beneficiary that does not exist, and it would leave
+two ingestion paths in the codebase where one of them is dead weight that still
+has to be tested. The break is documented here, in the endpoint's docstring, and
+in the README.
+
+**The `document_id` is returned despite no work having happened.** It is derived
+from `(tenant, source, external_id)` via uuid5 rather than assigned by the
+worker, so it is knowable at enqueue time. A caller can hold it, poll
+`GET /v1/documents/{id}`, and store the reference before indexing completes.
+This is a direct payoff from the Phase 1 decision to derive ids from identity
+rather than generate them.
+
+**A behavioural consequence worth stating.** Document-type validation moved into
+the worker, because parsing is part of the deferred work. The endpoint therefore
+accepts files it previously rejected with 415 or 422; those now surface as a
+dead-lettered job carrying the error. The failure is not hidden — it moved from
+the response to the job — but a client that treated 202 as success will report
+success for a document that never indexes. The console polls the job rather than
+trusting the 202, and any other client should too.
+
+**Trade-offs.** Clients must poll. There is no push notification when a job
+finishes; webhooks are a plausible later addition and are not built.
+
+**Reconsider if.** The API gains external consumers, at which point versioning
+stops being ceremony.

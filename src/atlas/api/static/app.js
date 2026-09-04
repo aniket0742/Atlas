@@ -94,6 +94,60 @@ async function loadCorpus() {
   }
 }
 
+/* ── ingestion queue ────────────────────────────────────────────────── */
+
+const TERMINAL_JOB_STATES = new Set(["succeeded", "dead"]);
+
+async function loadQueue() {
+  const stats = $("queue-stats");
+  const list = $("jobs");
+  try {
+    const data = await (await fetch("/v1/jobs?limit=12")).json();
+    const s = data.stats;
+
+    stats.replaceChildren();
+    for (const [label, value] of [
+      ["pending", s.pending],
+      ["running", s.running],
+      ["succeeded", s.succeeded],
+      ["dead", s.dead],
+      ["oldest pending", `${Math.round(s.oldest_pending_seconds)}s`],
+    ]) {
+      stats.append(el("dt", null, label), el("dd", null, value));
+    }
+
+    list.replaceChildren();
+    if (!data.jobs.length) {
+      list.append(el("li", "muted", "no jobs yet"));
+      return;
+    }
+    for (const job of data.jobs) {
+      const row = el("li");
+      const body = el("div");
+      body.append(el("span", "doc-name", job.external_id));
+      if (job.attempts > 1 || job.status === "dead") {
+        body.append(el("span", " muted", ` attempt ${job.attempts}/${job.max_attempts}`));
+      }
+      if (job.last_error) body.append(el("p", "job-error", job.last_error.slice(0, 160)));
+      if (job.status === "dead") {
+        const button = el("button", "requeue", "requeue");
+        button.type = "button";
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          await fetch(`/v1/jobs/${job.id}/requeue`, { method: "POST" });
+          await loadQueue();
+        });
+        body.append(button);
+      }
+      row.append(el("span", `status status-${job.status}`, job.status), body);
+      list.append(row);
+    }
+  } catch {
+    stats.replaceChildren(el("dd", "muted", "unavailable"));
+    list.replaceChildren();
+  }
+}
+
 /* ── ask ────────────────────────────────────────────────────────────── */
 
 function renderAnswer(data) {
@@ -325,12 +379,10 @@ async function upload(event) {
   const file = input.files[0];
   if (!file) return;
 
-  // Ingestion is synchronous: parse, chunk and embed all happen inside this
-  // request. Saying so beats a spinner that looks like it has hung.
   status.className = "upload-status upload-working";
   status.replaceChildren(
     el("span", "spinner"),
-    el("span", null, `indexing ${file.name} — parsing, chunking and embedding…`),
+    el("span", null, `queueing ${file.name}…`),
   );
   status.hidden = false;
   button.disabled = true;
@@ -347,12 +399,8 @@ async function upload(event) {
       return;
     }
     const data = await response.json();
-    status.className = "upload-status upload-ok";
-    status.textContent = data.changed
-      ? `indexed v${data.version} — ${data.chunk_count} chunks`
-      : "unchanged — content hash matched, indexing skipped";
     input.value = "";
-    await loadCorpus();
+    await pollJob(data.job_id, file.name, status);
   } catch (err) {
     status.className = "upload-status upload-bad";
     status.textContent = `upload failed: ${err}`;
@@ -361,9 +409,58 @@ async function upload(event) {
   }
 }
 
+async function pollJob(jobId, filename, status) {
+  // The endpoint returns 202: the document is queued, not indexed. Polling is
+  // the honest way to show that -- claiming success on the 202 would report a
+  // document as searchable before any worker had touched it.
+  const deadline = Date.now() + 5 * 60 * 1000;
+
+  while (Date.now() < deadline) {
+    await loadQueue();
+    let job;
+    try {
+      const response = await fetch(`/v1/jobs/${jobId}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      job = await response.json();
+    } catch (err) {
+      status.className = "upload-status upload-bad";
+      status.textContent = `lost track of job ${jobId}: ${err}`;
+      return;
+    }
+
+    if (job.status === "succeeded") {
+      status.className = "upload-status upload-ok";
+      status.textContent = `${filename} indexed`;
+      await loadCorpus();
+      return;
+    }
+    if (job.status === "dead") {
+      status.className = "upload-status upload-bad";
+      status.textContent = `${filename} failed after ${job.attempts} attempt(s): ${job.last_error || "unknown error"}`;
+      return;
+    }
+
+    status.className = "upload-status upload-working";
+    status.replaceChildren(
+      el("span", "spinner"),
+      el("span", null,
+        `${filename} — ${job.status}` +
+        (job.attempts > 1 ? ` (attempt ${job.attempts}/${job.max_attempts})` : "")),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  status.className = "upload-status upload-bad";
+  status.textContent = `${filename} still queued after 5 minutes — check the queue panel`;
+}
+
 /* ── init ───────────────────────────────────────────────────────────── */
 
 $("ask-form").addEventListener("submit", ask);
 $("upload-form").addEventListener("submit", upload);
 loadHealth();
 loadCorpus();
+loadQueue();
+// The queue changes without this page doing anything -- a worker elsewhere is
+// draining it -- so it is the one panel that refreshes on its own.
+setInterval(loadQueue, 5000);

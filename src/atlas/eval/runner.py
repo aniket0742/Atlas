@@ -17,6 +17,7 @@ Two modes:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import platform
 import time
@@ -30,6 +31,7 @@ from atlas.answer.service import AnswerService
 from atlas.config import Settings
 from atlas.eval import metrics
 from atlas.eval.dataset import EvalQuery, load
+from atlas.providers.base import LLMError
 from atlas.retrieval.service import Retriever
 
 
@@ -48,6 +50,7 @@ class QueryReport:
     unverified_quotes: int | None = None
     total_tokens: int | None = None
     latency_ms: float | None = None
+    answer_error: str | None = None
 
 
 class EvalRunner:
@@ -80,14 +83,34 @@ class EvalRunner:
         if with_answers and self._answerer is None:
             raise ValueError("with_answers requires an AnswerService")
 
-        reports: list[QueryReport] = []
         started = time.perf_counter()
 
-        for query in queries:
-            report = await self._run_one(
-                tenant_id, query, top_k, with_answers, active_mode, use_rerank
-            )
-            reports.append(report)
+        # Queries are independent, so they run concurrently under a semaphore.
+        #
+        # This loop was serial through Phases 1-3 because the free tier allowed
+        # 5 requests/minute and parallelism there buys nothing but 429s. On a
+        # paid tier the serial loop is the bottleneck rather than the quota: a
+        # 112-query run is ~340 sequential round trips of ~3.5s each.
+        #
+        # The bound matters. Retrieval embeds the query and (when enabled) runs
+        # a cross-encoder, both CPU-bound on the local ONNX runtime, so unbounded
+        # concurrency turns into CPU contention rather than throughput. The LLM
+        # call dominates and is network-bound, which is what this actually
+        # parallelises.
+        #
+        # asyncio.gather preserves input order, so reports stay aligned with the
+        # dataset and two runs remain comparable.
+        limit = asyncio.Semaphore(self._settings.eval_concurrency)
+
+        async def run_guarded(query: EvalQuery) -> QueryReport:
+            async with limit:
+                return await self._run_one(
+                    tenant_id, query, top_k, with_answers, active_mode, use_rerank
+                )
+
+        reports: list[QueryReport] = list(
+            await asyncio.gather(*(run_guarded(q) for q in queries))
+        )
 
         return self._assemble(
             reports=reports,
@@ -173,7 +196,18 @@ class EvalRunner:
 
         if with_answers and self._answerer is not None:
             t0 = time.perf_counter()
-            answer = await self._answerer.answer(tenant_id, query.question, top_k=top_k)
+            try:
+                answer = await self._answerer.answer(tenant_id, query.question, top_k=top_k)
+            except LLMError as exc:
+                # A provider failure on one query must not destroy the run. The
+                # first real --with-answers run aborted entirely on a single
+                # MAX_TOKENS truncation after most of the work was already paid
+                # for. Failures are recorded and surfaced in the summary instead,
+                # so a run reports "3 queries failed" rather than nothing at all.
+                report.latency_ms = (time.perf_counter() - t0) * 1000
+                report.answer_error = f"{type(exc).__name__}: {exc}"[:300]
+                return report
+
             report.latency_ms = (time.perf_counter() - t0) * 1000
             report.refused = answer.refused
             report.refusal_reason = answer.refusal_reason
@@ -263,6 +297,13 @@ class EvalRunner:
             summary["tokens"] = {
                 "total": sum(r.total_tokens or 0 for r in reports),
             }
+            failed = [r for r in reports if r.answer_error]
+            summary["answer_failures"] = {
+                "count": len(failed),
+                "examples": [
+                    {"query_id": r.query_id, "error": r.answer_error} for r in failed[:5]
+                ],
+            }
 
         return {
             "label": label,
@@ -285,6 +326,10 @@ class EvalRunner:
                 "min_similarity": self._settings.min_similarity,
                 "retrieval": mode,
                 "retrieval_candidates": self._settings.retrieval_candidates,
+                # Queries run concurrently, so per-query latency in this report
+                # includes contention and is NOT a single-user latency figure.
+                # Re-run with eval_concurrency=1 for that.
+                "eval_concurrency": self._settings.eval_concurrency,
                 "rrf_k": self._settings.rrf_k if mode == "hybrid" else None,
                 "rerank": rerank,
                 "rerank_model": self._settings.rerank_model if rerank else None,

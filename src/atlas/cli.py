@@ -371,5 +371,104 @@ def run_eval(
     asyncio.run(run())
 
 
+@app.command()
+def worker(
+    once: Annotated[
+        bool, typer.Option("--once", help="Drain the queue and exit, for scripts and tests.")
+    ] = False,
+    concurrency: Annotated[int | None, typer.Option(help="Jobs run in parallel.")] = None,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
+) -> None:
+    """Run an ingestion worker."""
+    _setup_logging(verbose)
+    import signal
+
+    from atlas.db.pool import Database
+    from atlas.ingest.pipeline import Ingestor
+    from atlas.ingest.worker import Worker
+    from atlas.providers.factory import get_embedder
+
+    settings = get_settings()
+    if concurrency is not None:
+        settings = settings.model_copy(update={"worker_concurrency": concurrency})
+
+    async def run() -> None:
+        db = Database(settings.database_url)
+        await db.open()
+        try:
+            worker_ = Worker(db, Ingestor(db, get_embedder(settings), settings), settings)
+
+            if once:
+                processed = 0
+                while await worker_.run_once():
+                    processed += 1
+                typer.echo(f"processed {processed} job(s)")
+                return
+
+            stop = asyncio.Event()
+
+            # Graceful shutdown: stop claiming new work, let the job in flight
+            # finish. Killing mid-job is survivable -- the lease expires and the
+            # reaper requeues it -- but it wastes the work already done.
+            #
+            # loop.add_signal_handler is not implemented on Windows, so fall back
+            # to signal.signal there. SIGTERM is what `docker stop` sends.
+            loop = asyncio.get_running_loop()
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                try:
+                    loop.add_signal_handler(sig, stop.set)
+                except NotImplementedError:
+                    signal.signal(sig, lambda *_: stop.set())
+
+            await worker_.run_forever(stop)
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@app.command()
+def jobs(
+    status: Annotated[
+        str | None, typer.Option(help="Filter: pending/running/succeeded/dead.")
+    ] = None,
+    limit: Annotated[int, typer.Option()] = 20,
+) -> None:
+    """Show the ingestion queue."""
+    from atlas.db import jobs as jobq
+    from atlas.db import repository as repo
+    from atlas.db.pool import Database
+
+    settings = get_settings()
+
+    async def run() -> None:
+        db = Database(settings.database_url)
+        await db.open()
+        try:
+            async with db.transaction() as conn:
+                tenant_id = await repo.ensure_tenant(conn, settings.default_tenant_slug)
+                stats = await jobq.queue_stats(conn, tenant_id)
+                rows = await jobq.list_jobs(conn, tenant_id, status=status, limit=limit)
+
+            typer.echo(
+                f"pending={stats['pending']} running={stats['running']} "
+                f"succeeded={stats['succeeded']} dead={stats['dead']} "
+                f"oldest_pending={stats['oldest_pending_seconds']:.0f}s"
+            )
+            typer.echo("")
+            for row in rows:
+                line = (
+                    f"  {row['status']:<10} {str(row['id'])[:8]}  "
+                    f"attempt {row['attempts']}/{row['max_attempts']}  {row['external_id']}"
+                )
+                typer.echo(line)
+                if row["last_error"]:
+                    typer.echo(f"             {row['last_error'][:100]}")
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
 if __name__ == "__main__":
     app()

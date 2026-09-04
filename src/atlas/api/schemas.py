@@ -16,13 +16,49 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-class IngestResponse(BaseModel):
+class IngestAcceptedResponse(BaseModel):
+    """202 response: the document is queued, not yet indexed.
+
+    `document_id` is usable immediately even though no work has happened. It is
+    derived from (tenant, source, external_id) rather than assigned by the
+    worker, so a caller can hold onto it before the job runs.
+    """
+
+    job_id: uuid.UUID
     document_id: uuid.UUID
-    version: int
-    chunk_count: int
-    changed: bool = Field(
-        description="False when the content hash was unchanged and indexing was skipped."
+    external_id: str
+    status: str = Field(default="pending", description="Queue state at accept time.")
+
+
+class JobSummary(BaseModel):
+    id: uuid.UUID
+    document_id: uuid.UUID
+    external_id: str
+    filename: str | None
+    status: str
+    attempts: int
+    max_attempts: int
+    last_error: str | None
+    created_at: datetime
+    updated_at: datetime
+    finished_at: datetime | None
+
+
+class QueueStats(BaseModel):
+    pending: int
+    running: int
+    succeeded: int
+    dead: int
+    oldest_pending_seconds: float = Field(
+        description="Age of the oldest waiting job. Depth alone cannot separate "
+        "'busy' from 'stuck'; a queue holding steady with work completing is "
+        "healthy and one holding steady with nothing progressing is not."
     )
+
+
+class QueueResponse(BaseModel):
+    stats: QueueStats
+    jobs: list[JobSummary]
 
 
 class DocumentSummary(BaseModel):
