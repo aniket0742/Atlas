@@ -1,0 +1,170 @@
+================================================================================================
+agent model: gemini-3.1-flash-lite
+================================================================================================
+  [ok ] refund-window        expect search     got 1 search(es)   turns=2   9041ms tok=982
+           query: refund policy duration
+           needed docs reached: 1/1
+  [ok ] atl-codes            expect search     got 1 search(es)   turns=2   2560ms tok=1212
+           query: ATL-5002 ATL-5004 difference
+           needed docs reached: 1/1
+  [ok ] retention-multi      expect search     got 2 search(es)   turns=2   2648ms tok=1399
+           query: customer data retention policy account closure
+           query: data retention backups account closure
+           needed docs reached: 2/2
+  [ok ] revocation-multi     expect search     got 1 search(es)   turns=2   2541ms tok=1133
+           query: revoked session still working
+           needed docs reached: 2/2
+  [ok ] refund-by-plan       expect search     got 1 search(es)   turns=2   2400ms tok=1052
+           query: refund policy window plan dependency
+           needed docs reached: 2/2
+  [ok ] unanswerable-leave   expect search     got 1 search(es)   turns=2   2273ms tok=853
+           query: parental leave policy
+  [ok ] arithmetic           expect no search  got no search      turns=1   1140ms tok=238
+  [ok ] greeting             expect no search  got no search      turns=1   1127ms tok=279
+  [ok ] vocab-chargeback     expect search     got 1 search(es)   turns=2   2274ms tok=957
+           query: chargeback policy account status
+           needed docs reached: 1/1
+  [ok ] vocab-migration      expect search     got 1 search(es)   turns=2   3138ms tok=1254
+           query: database migration strategy incompatible changes
+           needed docs reached: 1/1
+  [ok ] general-knowledge    expect no search  got no search      turns=1   1013ms tok=239
+  [ok ] self-answering       expect no search  got no search      turns=1    992ms tok=241
+  [ok ] cross-domain         expect search     got 2 search(es)   turns=2   2159ms tok=1351
+           query: audit log retention period
+           query: query text retention period
+           needed docs reached: 2/2
+  [ok ] symptom-to-cause     expect search     got 2 search(es)   turns=2   2990ms tok=1808
+           query: webhook signature failure emoji support
+           query: webhook retry schedule
+           needed docs reached: 1/1
+  [ok ] unanswerable-sso     expect search     got 1 search(es)   turns=2   2267ms tok=860
+           query: SAML single sign-on support
+  [ok ] terse                expect search     got 1 search(es)   turns=2   2534ms tok=1071
+           query: token lifetime
+           needed docs reached: 1/1
+
+  tool-selection accuracy : 16/16
+  unnecessary searches    : 0
+  multi-doc cases issuing >1 query : 2/4
+  multi-doc cases reaching all needed docs : 4/4
+  mean latency (net of quota waits) : 2568ms
+  total tokens            : 14929 (in 13264 / out 1665)
+  cost per 1000 questions : $0.36
+  errored cases           : 0
+  rate-limit waits        : 0 (excluded from latency)
+
+================================================================================================
+agent model: gemini-3.5-flash-lite
+================================================================================================
+  [ok ] refund-window        expect search     got 1 search(es)   turns=2   3024ms tok=1012
+           query: refund policy time limit customer
+           needed docs reached: 1/1
+  [ok ] atl-codes            expect search     got 1 search(es)   turns=2   2609ms tok=1244
+           query: ATL-5002 ATL-5004
+           needed docs reached: 1/1
+  [ok ] retention-multi      expect search     got 1 search(es)   turns=2   2592ms tok=1035
+           query: customer data retention account closure backups
+           needed docs reached: 1/2
+  [ok ] revocation-multi     expect search     got 1 search(es)   turns=2   3245ms tok=1300
+           query: revoked session still worked release change
+           needed docs reached: 2/2
+  [ok ] refund-by-plan       expect search     got 1 search(es)   turns=2   3399ms tok=986
+           query: refund window plan
+           needed docs reached: 2/2
+  [ok ] unanswerable-leave   expect search     got 2 search(es)   turns=3   3812ms tok=1858
+           query: parental leave policy
+           query: leave benefits parental maternity paternity time off
+  [ok ] arithmetic           expect no search  got no search      turns=1    980ms tok=238
+  [ok ] greeting             expect no search  got no search      turns=1   1352ms tok=274
+  [ok ] vocab-chargeback     expect search     got 1 search(es)   turns=2   2335ms tok=1012
+           query: payment reversal chargeback buyer account
+           needed docs reached: 1/1
+  [ok ] vocab-migration      expect search     got 1 search(es)   turns=2   2683ms tok=1147
+           query: database change running code choke
+           needed docs reached: 1/1
+  [ok ] general-knowledge    expect no search  got no search      turns=1   1390ms tok=252
+  [ok ] self-answering       expect no search  got no search      turns=1   1639ms tok=253
+  [ok ] cross-domain         expect search     got 2 search(es)   turns=2   3101ms tok=1390
+           query: audit logs retention period
+           query: query text retention period
+           needed docs reached: 2/2
+  [ok ] symptom-to-cause     expect search     got 2 search(es)   turns=3   3818ms tok=2755
+           query: webhook signatures emoji support failing
+           query: webhook retry schedule schedule exponential backoff
+           needed docs reached: 1/1
+  [ok ] unanswerable-sso     expect search     got 2 search(es)   turns=3   4932ms tok=1878
+           query: SAML single sign on SSO
+           query: SAML SSO authentication identity provider
+  [ok ] terse                expect search     got 1 search(es)   turns=2   2675ms tok=1045
+           query: token lifetime
+           needed docs reached: 1/1
+
+  tool-selection accuracy : 16/16
+  unnecessary searches    : 0
+  multi-doc cases issuing >1 query : 1/4
+  multi-doc cases reaching all needed docs : 3/4
+  mean latency (net of quota waits) : 2724ms
+  total tokens            : 17679 (in 15900 / out 1779)
+  cost per 1000 questions : $0.58
+  errored cases           : 0
+  rate-limit waits        : 0 (excluded from latency)
+
+================================================================================================
+agent model: gemini-3.7-flash
+================================================================================================
+  [ok ] refund-window        expect search     got 1 search(es)   turns=2   3425ms tok=1182
+           query: refund policy request timeframe window
+           needed docs reached: 1/1
+  [ok ] atl-codes            expect search     got 1 search(es)   turns=2   3339ms tok=1414
+           query: ATL-5002 ATL-5004
+           needed docs reached: 1/1
+  [ok ] retention-multi      expect search     got 1 search(es)   turns=2   3881ms tok=1302
+           query: customer data retention account closure backup
+           needed docs reached: 1/2
+  [ok ] revocation-multi     expect search     got 1 search(es)   turns=2   5109ms tok=1845
+           query: session revocation
+           needed docs reached: 2/2
+  [ok ] refund-by-plan       expect search     got 1 search(es)   turns=2   3600ms tok=1179
+           query: refund policy window plan
+           needed docs reached: 2/2
+  [ok ] unanswerable-leave   expect search     got 4 search(es)   turns=4  10471ms tok=2751
+           query: parental leave policy
+           query: leave
+           query: time off
+           query: benefits
+  [ok ] arithmetic           expect no search  got no search      turns=1   1644ms tok=330
+  [ok ] greeting             expect no search  got no search      turns=1   2091ms tok=388
+  [ok ] vocab-chargeback     expect search     got 1 search(es)   turns=2   3914ms tok=1311
+           query: chargeback buyer account policy
+           needed docs reached: 1/1
+  [ok ] vocab-migration      expect search     got 1 search(es)   turns=2   5869ms tok=1275
+           query: database migration breaking change deploy
+           needed docs reached: 1/1
+  [ok ] general-knowledge    expect no search  got no search      turns=1   3360ms tok=355
+  [ok ] self-answering       expect no search  got no search      turns=1   2079ms tok=409
+  [ok ] cross-domain         expect search     got 2 search(es)   turns=3   5350ms tok=2257
+           query: audit logs retention
+           query: query text retention
+           needed docs reached: 2/2
+  [ok ] symptom-to-cause     expect search     got 1 search(es)   turns=2   6784ms tok=1488
+           query: webhook signature emoji retry schedule
+           needed docs reached: 1/1
+  [ok ] unanswerable-sso     expect search     got 4 search(es)   turns=4  11229ms tok=3223
+           query: SAML single sign-on
+           query: SSO authentication
+           query: SAML
+           query: single sign-on
+  [ok ] terse                expect search     got 1 search(es)   turns=2   2796ms tok=1196
+           query: token lifetime
+           needed docs reached: 1/1
+
+  tool-selection accuracy : 16/16
+  unnecessary searches    : 0
+  multi-doc cases issuing >1 query : 1/4
+  multi-doc cases reaching all needed docs : 3/4
+  mean latency (net of quota waits) : 4684ms
+  total tokens            : 21905 (in 17646 / out 4259)
+  cost per 1000 questions : $1.83
+  errored cases           : 0
+  rate-limit waits        : 0 (excluded from latency)
+

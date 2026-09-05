@@ -102,6 +102,10 @@ class Answer:
     reranked: bool = False
     best_dense_score: float | None = None
     per_component: dict[str, int] = field(default_factory=dict)
+    # How an agentic answer's evidence was gathered: iterations, tool calls,
+    # stop reason, whether it degraded. None for the plain path, which is how a
+    # caller tells the two apart without a separate flag.
+    agent_trace: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)

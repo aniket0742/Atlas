@@ -19,6 +19,11 @@ import re
 from typing import Any
 
 from atlas.core.models import TokenUsage
+from atlas.providers.base import (
+    AgentMessage,
+    AgentTurn,
+    ToolCall,
+)
 
 _WORD = re.compile(r"[a-z0-9]+")
 
@@ -129,4 +134,77 @@ class FakeLLMProvider:
                 output_tokens=len(first_sentence.split()),
                 total_tokens=len(prompt.split()) + len(first_sentence.split()),
             ),
+        )
+
+
+class ScriptedToolCallingLLM:
+    """A tool-calling model whose turns are written by the test.
+
+    The agent loop's job is to enforce bounds, feed results back and degrade
+    safely. None of that should be asserted through a real model, whose
+    behaviour is the one thing in the system that is not deterministic -- a test
+    that depends on Gemini choosing to search twice is a test that fails for
+    reasons unrelated to the loop.
+
+    So the script is a list of turns. Each entry is either a list of
+    (tool_name, arguments) pairs to request, or a string to finish with. Running
+    off the end finishes, which mirrors a model that has decided it is done.
+    """
+
+    def __init__(
+        self,
+        script: list[Any] | None = None,
+        *,
+        model_id: str = "fake-agent",
+        error: Exception | None = None,
+        usage_per_turn: TokenUsage | None = None,
+    ) -> None:
+        self._script = list(script or [])
+        self._model_id = model_id
+        # Raised on every call, for testing provider failure and the fallback.
+        self._error = error
+        self._usage = usage_per_turn or TokenUsage(
+            prompt_tokens=100, output_tokens=20, thinking_tokens=5, total_tokens=125
+        )
+        #: Every call's history, so a test can assert what the model was shown.
+        self.calls: list[dict[str, Any]] = []
+
+    @property
+    def model_id(self) -> str:
+        return self._model_id
+
+    def generate_with_tools(
+        self,
+        *,
+        system_instruction: str,
+        history: list[AgentMessage],
+        tools: list[dict[str, Any]],
+        timeout_seconds: float | None = None,
+    ) -> AgentTurn:
+        self.calls.append(
+            {
+                "system": system_instruction,
+                "history": list(history),
+                "tools": [t["name"] for t in tools],
+                "timeout_seconds": timeout_seconds,
+            }
+        )
+
+        if self._error is not None:
+            raise self._error
+
+        index = len(self.calls) - 1
+        if index >= len(self._script):
+            return AgentTurn(text="done", tool_calls=(), usage=self._usage)
+
+        turn = self._script[index]
+        if isinstance(turn, str):
+            return AgentTurn(text=turn, tool_calls=(), usage=self._usage)
+
+        return AgentTurn(
+            text=None,
+            tool_calls=tuple(
+                ToolCall(name=name, arguments=dict(args)) for name, args in turn
+            ),
+            usage=self._usage,
         )

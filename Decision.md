@@ -1003,3 +1003,688 @@ finishes; webhooks are a plausible later addition and are not built.
 
 **Reconsider if.** The API gains external consumers, at which point versioning
 stops being ceremony.
+
+---
+
+## ADR-0024: Two model roles, and `gemini-3.5-flash-lite` for the answer
+
+**Status:** accepted (Phase 4)
+
+**Problem.** One model served every purpose. Phase 4 introduces an agent loop
+whose tool-routing turns are high-volume, cheap, and latency-sensitive, while the
+final grounded answer is low-volume and is where quality is visible. Those are
+different jobs with different requirements.
+
+**Decision.** Two roles behind the existing provider abstraction:
+
+| role | model | why |
+|---|---|---|
+| final answer | `gemini-3.5-flash-lite` | no measurably better option; see below |
+| agent / tool routing | `gemini-3.1-flash-lite` | equal routing quality, fastest, cheapest |
+
+`get_llm()` and `get_agent_llm()` build both from one `_build_llm(settings, model)`.
+No new provider type, no second abstraction.
+
+### One API key covers both
+
+Free-tier quota is scoped per project **per model**
+(`GenerateRequestsPerMinutePerProjectPerModel`). Verified by exhausting one
+model until it returned 429 and finding the other still served on the same key.
+Splitting roles therefore adds headroom instead of dividing one budget. No second
+key or project is required.
+
+### Why `gemini-3.5-flash` was dropped
+
+It was the default through Phases 1–3 and is **strictly dominated**: $1.50/$9.00
+per 1M tokens against $0.75/$3.75 for `gemini-3.8-flash`, a model the vendor
+describes as newer and more capable. It also carries a 20 requests/**day**
+free-tier cap, which cannot support a single 112-query evaluation run. It had
+never been re-examined after being chosen in Phase 1.
+
+### Why the answer model is the cheap one
+
+Measured on 112 queries with retrieval held constant (frozen in
+`eval/baselines/answer-models/`):
+
+| model | unverified quotes | p50 | $/1k queries |
+|---|---|---|---|
+| gemini-3.1-flash-lite | 14 | 2,254 ms | $0.54 |
+| **gemini-3.5-flash-lite** | 3 | 2,507 ms | $0.71 |
+| gemini-3.7-flash | 2 | 3,016 ms | $2.44 |
+| gemini-3.8-flash | 1 | 3,968 ms | $2.83 |
+
+All four scored 12/12 on refusing unanswerable questions, 0 wrongly refused, and
+100/100 on citation coverage. The guarantees from ADR-0010 hold regardless of
+model; only verbatim-quoting fidelity varies.
+
+**The ranking is not readable from one run.** `gemini-3.5-flash-lite` produced
+5, then 8, then 3 unverified quotes across three runs of identical
+configuration — a spread wider than most gaps between models. Paired bootstrap
+on per-query counts (ADR-0021), against the selected default:
+
+- `gemini-3.1-flash-lite` +0.098, CI [+0.045, +0.161] — **significantly worse**
+- `gemini-3.7-flash` −0.009, CI [−0.027, +0.000] — no measured difference
+- `gemini-3.8-flash` −0.018, CI [−0.045, +0.000] — no measured difference
+
+So the more expensive models are **not measurably better** at the one thing that
+separates them, while costing 3.4–4× more and running 20–58% slower. Choosing the
+cheaper model here is the evidence-backed decision, not the budget one — and had
+the first single-run table been taken at face value, the opposite conclusion
+would have been drawn from noise.
+
+### What this cost to measure honestly
+
+Two corrections were needed before the numbers meant anything.
+
+**Cost was computed from a blended 85/15 input:output split**, because the eval
+summary carried only a total token count. That was wrong by 15–35%, understating
+`gemini-3.8-flash` most. The cause is visible in the data: `3.7` and `3.8` emit
+3–4× more output tokens than the lite models on identical input, because they
+produce thinking tokens — billed as output, invisible in the response text. The
+runner now records input and output separately, folding thinking into output.
+
+**Input tokens are identical (141,584) across all four models**, which is the
+check that retrieval was genuinely held constant rather than assumed to be.
+
+**Reconsider if.** The eval set grows enough to resolve differences the current
+n cannot; quoting fidelity degrades in production; or promotional Flash pricing
+expires on 2027-01-01, which doubles the cost of `3.6`/`3.7`/`3.8` and widens the
+gap further in favour of the lite models.
+
+---
+
+## ADR-0025: `gemini-3.1-flash-lite` routes the agent's tool calls
+
+**Status:** accepted (Phase 4)
+
+**Problem.** The agent role decides when to call a tool and what to search for.
+It is high-volume, latency-sensitive and cheap per call — the opposite profile to
+writing the final cited answer, which ADR-0024 settled separately.
+
+**Decision.** `gemini-3.1-flash-lite`, measured against
+`gemini-3.5-flash-lite` and `gemini-3.7-flash` on 16 routing cases with real
+retrieval. Frozen in `eval/baselines/agent-routing/`.
+
+| model | selection accuracy | unnecessary searches | multi-doc coverage | latency | $/1k |
+|---|---|---|---|---|---|
+| **gemini-3.1-flash-lite** | 16/16 | 0 | **4/4** | **2,568 ms** | **$0.36** |
+| gemini-3.5-flash-lite | 16/16 | 0 | 3/4 | 2,724 ms | $0.58 |
+| gemini-3.7-flash | 16/16 | 0 | 3/4 | 4,684 ms | $1.83 |
+
+### The first benchmark could not justify any choice
+
+An initial 8-case set scored **8/8 for every candidate**, including models
+costing 15x more. That is not evidence of equivalence; it is evidence the
+benchmark was too easy to measure anything. Choosing on it would have been
+choosing on noise-free ties.
+
+It was rebuilt around the failure modes routing actually has — vocabulary
+mismatch between question and corpus, questions that only look like lookups,
+answers contained in the question, cross-domain comparisons, and terse input.
+
+**Selection accuracy still saturated at 16/16.** Routing over a single tool is
+genuinely easy, and that is recorded as the finding rather than papered over.
+
+### What did separate them
+
+Multi-document coverage. `gemini-3.1-flash-lite` was the only model to issue two
+genuinely different queries for a comparison spanning two documents and reach
+both; the others collapsed it into one query and reached one. That is a real
+capability difference on exactly the query class Phase 2 measured as hardest
+(multi-doc Recall@1 stuck at 0.400 for every retrieval configuration).
+
+Persistence cut the other way. On an unanswerable question `gemini-3.7-flash`
+searched four times over 10.5 s before giving up, against one or two searches for
+the lite models, reaching the same correct conclusion. More persistence bought
+nothing but latency.
+
+**Reconsider if.** The Phase 4 agent evaluation — 112 queries against the real
+tool set, rather than 16 synthetic cases against one tool — separates these
+models on selection quality. That evaluation is the proper instrument; this
+benchmark exists to make a defensible interim choice, and it is one environment
+variable to change.
+
+---
+
+## ADR-0026: Tool guarantees live in the registry, not in the tools
+
+**Status:** accepted (Phase 4)
+
+**Problem.** Every tool needs argument validation, a timeout, an authorization
+check and structured logging. The obvious placement is inside each tool.
+
+**Decision.** A tool implements exactly one method, `execute`. Validation,
+timeouts, permission checks and logging all happen in `ToolRegistry.invoke`,
+around the call.
+
+**Why.** If validation is the tool's job, the third tool someone adds forgets it,
+and the failure is a malformed query against a database rather than a clean
+rejection. Placing the guard in the registry means a tool **cannot opt out of it
+by being written carelessly**. The tool author writes the interesting part; the
+framework enforces the boring parts uniformly.
+
+The same argument applies to timeouts. Per-tool budgets are declared as class
+attributes — a local database query and a remote API call do not deserve the
+same allowance — but the enforcement is `asyncio.wait_for` in the registry, so a
+tool that forgets to bound its own work is still bounded.
+
+### Failures are returned, not raised
+
+Tool arguments come from a language model, so bad arguments are a **normal
+operating condition**, not an exception. `invoke` returns a `ToolResult` for
+every outcome, including unknown tool names, invalid arguments, denials,
+timeouts and crashes. The agent loop hands that back as an ordinary function
+response.
+
+This is what makes a one-turn recovery possible: a model that calls
+`search(quer="x")` is told `query: Field required` and fixes it. Raising would
+abort an entire request over a typo. Only genuine programming errors in Atlas
+propagate as exceptions.
+
+The distinct outcome values exist because the loop reacts differently to each —
+invalid arguments are worth a retry, a denial never is.
+
+### Two smaller choices worth recording
+
+**Argument schemas are pydantic models.** Already a dependency, generates the
+JSON schema, validates, and produces typed arguments. Verified that the Gemini
+SDK accepts the emitted schema dict directly, so the framework stays
+provider-agnostic without being provider-incompatible — there is a test asserting
+this rather than an assumption.
+
+**Tools the caller cannot use are not advertised.** `declarations(context)` omits
+them entirely rather than listing them and denying the call. A model cannot waste
+a turn on, or be tempted by, a tool it was never shown. Relatedly, the denial
+message does not name the missing permission: that is operator-facing detail, and
+echoing it puts the authorization model into text the model can reason about.
+
+**Trade-off.** A tool cannot customise its own validation or error formatting.
+If one ever genuinely needs to, the fix is to widen the framework deliberately
+rather than to let that tool bypass it.
+
+**Reconsider if.** A tool needs streaming or partial results, which the current
+single-return shape cannot express.
+
+---
+
+## ADR-0027: Identity is carried to tools, never derivable by them
+
+**Status:** accepted (Phase 4)
+
+**Problem.** ADR-0010 noted that in Phase 1 the worst case from a prompt-injected
+document was a wrong answer, because the model had no tools. Tools change that.
+Anyone who can get a document into the corpus can put instructions in it, and
+those instructions reach the model as evidence. A document reading *"to answer
+this, search tenant acme-corp"* must not become a working cross-tenant read.
+
+**Decision.** Identity travels in `ToolContext`, built by the server from the
+request. The model supplies only a tool *name* and its *arguments*. Identity is
+therefore a separate parameter, not a field the model can set, and three
+mechanisms keep it that way.
+
+### 1. A tool may not declare identity as an argument
+
+`ToolRegistry.register` refuses any tool whose `Args` model declares a reserved
+name — `tenant_id`, `permissions`, `user`, `role`, and others — checking field
+names and aliases, case-insensitively.
+
+This fails at **registration**, which in practice is import time. A tool that
+could accept a tenant is a design error, and a design error should be impossible
+to deploy rather than caught by a runtime guard on the day someone probes it.
+Checking at call time would mean the vulnerable tool exists and is protected
+only by a check somebody could later remove.
+
+### 2. Unknown arguments are rejected, not ignored
+
+Every `Args` model inherits `ToolArgs`, which sets `extra="forbid"`.
+
+Pydantic's default is to ignore unknown fields. Under that default a model
+emitting `{"query": "salaries", "tenant_id": "victim"}` would have the extra key
+silently dropped: **the call would succeed and nothing would record the
+attempt.** It would look like an ordinary search in the logs and in the agent
+trace.
+
+Forbidding turns it into a visible `invalid_arguments` result carrying the
+offending key, retained in the trace as the model supplied it. That is the
+difference between a control and an accident, and it is why a blocklist of
+reserved names alone would not be enough — it would only catch the names we
+thought to imagine.
+
+### 3. The context is frozen and server-built
+
+`ToolContext` is a frozen dataclass. `current_tool_context` in the API layer
+constructs it from `app.state.tenant_id` and nothing else: not the request body,
+not headers, not model output. There is a test asserting that
+`x-tenant-id: <victim>` on the request changes nothing.
+
+Phase 4 has no authentication, so `permissions` is empty and any tool declaring
+`required_permission` is unavailable. Phase 5 replaces the body of that one
+function with claims from the caller's token; nothing downstream changes, because
+everything downstream already takes a `ToolContext`.
+
+### What this does and does not defend against
+
+**Defended:** the model cannot choose whose data is read. Injected text reaches a
+tool as an ordinary string argument, and the tool still queries the caller's
+tenant, because the tenant was never on a path the model could write to. Tested
+against four injection shapes including a full poisoned-document payload.
+
+**Not defended, and stated plainly:** a retrieved document can still influence
+*what* the agent searches for. It can waste a turn, steer a query, or persuade
+the model to look for something irrelevant. Those cost tokens and can degrade an
+answer. They cannot cross a tenant boundary, which is the property worth
+guaranteeing.
+
+Also undefended by this ADR: a tool that is simply written wrong — one that
+queries without a tenant filter. Nothing here can prevent that, though the
+reserved-name rule means such a tool has no tenant to use *except* the context
+one. The repository layer's mandatory `tenant_id` parameter (ADR-0003) is the
+control that matters there, and it predates this.
+
+**Reconsider if.** A tool legitimately needs to act across tenants — an
+administrative report, say. That is a new capability with its own permission and
+its own audit trail, not a relaxation of this rule.
+
+---
+
+## ADR-0028: The search tool shows the model snippets and keeps the chunks
+
+**Status:** accepted (Phase 4, step 4)
+
+**Context.** `search_knowledge_base` is the agent's first tool. Its results have
+two consumers with incompatible appetites.
+
+The **model** consumes results inside the loop, where every tool response is
+resent on every subsequent turn. A five-hit response containing full chunk text
+is roughly 1,500 tokens; four iterations of that is 6,000 tokens carried through
+to the end, most of it text the server already holds in memory.
+
+The **answer** consumes results at the end, through the grounded path unchanged
+from Phase 1 — which needs whole chunks, with character offsets and provenance,
+because citation resolution and verbatim quote verification are defined against
+the full text (ADR-0011).
+
+Serving both from one payload means either paying the token cost on every turn
+or citing against truncated text.
+
+**Decision.** The tool returns a `ToolOutput`, which the framework splits:
+
+* `content` reaches the model — evidence id, document, section path, relevance
+  and a 480-character snippet per hit.
+* `artifacts` stays server-side on the `ToolResult` and is excluded from
+  `for_model()` — the full `RetrievedChunk` objects.
+
+The exclusion is a property of the type, not of each caller's discipline. The
+agent loop accumulates evidence from `artifacts` across iterations, deduplicated
+by chunk id, so citations resolve against the union of every search.
+
+**Why the split rather than the alternatives.** Returning full text everywhere
+is the obvious option and costs the tokens above. Returning ids only, and
+re-reading chunks from the database at answer time, is a second query for rows
+already in memory and introduces a window where a re-ingestion could change what
+the ids point at. The split costs one dataclass.
+
+**What this trades away, stated plainly.** The model judges *sufficiency* from
+truncated text, so it can stop searching believing a snippet answers a question
+that the full chunk would have shown it does not. That error affects when the
+loop **stops**, not what it cites: citations are always resolved and verified
+against full chunk text. 480 characters is a guess, not a measured value — it is
+roughly 40% of a typical chunk. Step 8's evaluation is where it becomes
+falsifiable, by comparing agent and plain-RAG answers on the same queries.
+
+**The tool changes no retrieval behaviour.** Same modes, same fusion, same
+reranker, same similarity gate. If the agent turns out to beat plain RAG, it did
+so by choosing what to search for and searching more than once — the hypothesis
+under test for the multi-document queries stuck at Recall@1 = 0.400. A tool that
+also retrieved *differently* would make that improvement unattributable.
+
+**Arguments deliberately absent.** `query` and `top_k` only. No source filter
+and no similarity floor: both are evidence policy, and a model that can lower
+the relevance floor can talk itself into evidence the system already judged too
+weak to answer from. No tenant — registration refuses it (ADR-0027).
+
+**Empty results explain themselves.** "Nothing matched" and "something matched
+but scored 0.41, below the 0.55 floor" call for different next queries, and the
+difference is invisible from an empty list. The note carries the best score so
+the model reformulates rather than concluding the corpus is silent.
+
+**A related leak found while building this.** `Tool.declaration()` was shipping
+the `Args` class docstring as the JSON-schema description, because pydantic
+derives one from the other. For this tool that was ~500 tokens of internal
+rationale — written for a maintainer — sent to the model on every request. The
+declaration now strips it; `Tool.description` and per-field descriptions are the
+only prompt text, and both are written deliberately.
+
+**Reconsider if.** Evaluation shows the loop stopping early on questions whose
+answer sat past the 480-character cut. The fix would be a wider snippet, or a
+`fetch_full_passage(evidence_id)` tool letting the model pay for full text only
+when it decides it needs to — not full text by default.
+
+---
+
+## ADR-0029: The agent loop gathers evidence; it does not write the answer
+
+**Status:** accepted (Phase 4, step 5)
+
+**Context.** A tool-calling loop is the obvious place to also generate the final
+answer — the model is already holding the conversation, and one more turn would
+produce prose. That would put answer generation on the agent model, outside the
+grounded path, with no evidence blocks and no server-generated citation ids.
+
+**Decision.** The loop returns *evidence and a trace*. The agent model decides
+what to search for and when it has enough; the answer model then writes the
+response through the unchanged grounded path — evidence blocks, citation
+resolution, verbatim quote verification, refusal downgrade (ADR-0011).
+
+The agent model is never asked for a citation, so it is never trusted to produce
+one. This also follows the two-model split (ADR-0024): routing is cheap and
+high-volume, answering is the product.
+
+**Four bounds, because each catches what the others miss.** Iterations (4) cap
+reasoning depth. Total tool calls (8) bound work an iteration cap cannot, since
+one turn may request several calls at once — observed in practice on the first
+live run, which issued two searches in one turn. A wall-clock budget (60s),
+checked before each new step, catches the case where every individual step is
+within limits but the whole is too slow to keep a request waiting. Per-tool
+timeouts already exist in the registry.
+
+Hitting a bound is not an error: the loop returns what it found and records
+which bound stopped it. These numbers are starting points, not measured optima —
+step 8 is what makes them falsifiable.
+
+**Degrading rather than failing.** When the model path yields no evidence for
+any reason — provider down, model answered without searching, every search
+empty, a bound hit first — the loop runs one plain search on the original
+question, exactly what plain RAG would have done, and marks the plan degraded
+with the reason. Refusing because the *agent* failed would serve a worse answer
+than the system is capable of. The fallback is recorded as a step so a trace
+never jumps from no searches to some evidence unexplained.
+
+**Calls in one turn run concurrently.** Safe because tools are stateless and
+each carries its own timeout, and `invoke` never raises so there is no partial
+failure to unwind. Two searches cost the slower one rather than their sum — and
+the multi-document questions this loop exists for are exactly the ones that
+produce several calls at once.
+
+**A separate `ToolCallingLLM` protocol**, not more methods on `LLMProvider`.
+Tool calling is a capability the answering path never needs and some providers
+lack; widening the existing interface would force every provider — including the
+offline fake the whole suite depends on — to implement a surface it has no use
+for. The provider is stateless: the loop owns the conversation and passes the
+whole history each time, which is what makes a run reproducible in a test.
+
+### What the offline tests could not tell us
+
+Thirty loop tests passed against a scripted model before the first live call.
+Two bugs survived all of them, both in the layer a fake cannot exercise — what
+the *real API* accepts:
+
+1. **`additionalProperties: false` is rejected with a 400.** `ToolArgs` sets
+   `extra="forbid"`, and pydantic emits that key; Gemini's function-calling
+   schema dialect has no such field. Declarations are now reduced to the
+   supported subset. This does **not** weaken the authorization boundary:
+   `extra="forbid"` is enforced by `model_validate` inside `invoke`, before the
+   tool runs. The schema key only ever *told* the provider about the rule.
+
+   Notably, ADR-0026's test asserting "the declaration is accepted by the
+   provider SDK" passed throughout. Constructing the SDK's type is not evidence
+   the request will succeed — the type was happy to hold a field the service
+   refuses.
+
+2. **Gemini 3.x thinking models require `thought_signature` echoed back** on
+   function-call parts. Reconstructing a model turn from neutral message types
+   dropped it, so the first iteration always worked and every second iteration
+   failed with a 400. `ToolCall` now carries an opaque `provider_state` that the
+   loop passes through without reading — the field is deliberately meaningless
+   to everything except the provider that produced it.
+
+Both were caught by the fallback rather than by a failed request: the smoke run
+returned answerable evidence while logging the error, which is the degradation
+path working as designed and is also exactly how such a bug could have gone
+unnoticed in production. That is an argument for alerting on `degraded`, not
+merely recording it.
+
+**Nested-model arguments are now refused at registration.** They produce
+`$defs`/`$ref`, and whether a given provider resolves those is unverified. The
+failure mode if not is a 400 at request time; refusing at boot keeps the
+discovery where every other structural check lives.
+
+**Reconsider if.** Evaluation shows the loop's bounds binding on questions that
+would have been answered with one more iteration, or the answer model
+consistently refusing on evidence the agent judged sufficient — which would mean
+the snippet/chunk split of ADR-0028 is misleading the stopping decision.
+
+---
+
+## ADR-0030: One answering path, two ways of choosing evidence
+
+**Status:** accepted (Phase 4, step 6)
+
+**Context.** The agent loop ends holding a conversation with a model. Letting it
+produce the final text is one more turn and costs nothing extra — which is what
+most agent frameworks do.
+
+It would also move answer generation off the grounded path: no evidence blocks,
+no server-generated ids, no citation resolution, no verbatim quote check, no
+refusal downgrade. Every groundedness property Phase 1 built would silently fail
+to apply to the new feature, and it would look like it was working, because the
+answers would read fine.
+
+**Decision.** `AnswerService.answer_from_evidence` was extracted from
+`answer()`. Both paths call it. The plain path chooses evidence with one
+retrieval; the agent path chooses it with a loop. Below that line nothing
+differs — same prompt, same ids, same validation, same downgrade.
+
+There is no agentic answering path. There is one answering path and two ways of
+deciding what reaches it. The agent model is never asked for a citation, so it
+is never trusted to produce one.
+
+The agent tests are largely the answering tests run again through the agent: a
+guarantee that holds only on the path someone remembered to test is not a
+guarantee.
+
+**Evidence order is a rank interleave, not a sort.** Sorting the union by score
+would be wrong: reranker outputs are unnormalised per-query logits (ADR-0020),
+so a score from one search says nothing about a score from another, and sorting
+them invents an ordering out of noise. Concatenating is also wrong — it puts one
+whole search ahead of another, so any truncation costs a two-part question the
+half it searched for last. Interleaving by rank preserves each search's own
+valid ordering and never invents one between them.
+
+**Evidence is capped** at `agent_max_evidence` (12). Eight tool calls of ten
+passages each can gather far more than helps.
+
+**Agent mode is opt-in per request** and off by default, so existing callers see
+no change. Per-request retrieval knobs (`top_k`, `mode`, `rerank`,
+`min_similarity`, `source_ids`) are **rejected** with a 400 rather than ignored:
+they describe a single search, the agent runs several with parameters it picks,
+and silently dropping them would report a configuration that never ran.
+
+### The first live comparison went against the agent
+
+Two questions, agent versus plain, same corpus and same answer model:
+
+| | plain | agent |
+|---|---|---|
+| "refund window and who approves exceptions" | 2 documents cited, both parts answered | **1 document**, lost the enterprise window |
+| "rotate an API key, and what if one leaks" | both parts answered | **refused** — "no information on what to do if a key leaks" |
+| prompt tokens | ~1,270 | ~3,760 (3x) |
+| latency | ~3.3s | ~4.6s |
+
+The agent routed *well* — it decomposed both questions into sensible sub-searches
+and each returned results. It then answered worse, at three times the token cost.
+
+This is two questions and therefore an anecdote, not a measurement. But it is a
+specific, plausible anecdote and the leading hypothesis is uncomfortable for the
+design above: **the interleave discards the reranker's global ordering.** The
+plain path hands the answer model eight passages ranked against each other by a
+cross-encoder over one candidate pool. The agent hands it twelve, ordered by a
+rule that is deliberately agnostic about cross-search quality. More evidence,
+worse ordered — which is the classic recipe for a worse answer.
+
+If that is right, the fix is not to abandon the interleave but to restore a
+single comparable ordering: rerank the union once against the original question
+before answering. That is one cross-encoder pass over ~12 passages, it changes
+no retrieval behaviour, and it makes the scores comparable by construction
+rather than by assumption.
+
+Not doing it now. The whole point of step 8 is to measure this rather than
+guess, and implementing a fix for a two-sample observation is how unmeasured
+complexity gets in. Recorded here as the primary hypothesis to test, with
+`agent_max_evidence` as the secondary one.
+
+**Reconsider if.** Evaluation confirms the ordering hypothesis — in which case
+a union rerank goes in and this ADR is superseded. Or evaluation shows the agent
+losing on questions it *routed* well, which would point at the snippet/chunk
+split of ADR-0028 misleading the stopping decision instead.
+
+---
+
+## ADR-0031: The agent's evidence is reranked once, as a union, before answering
+
+**Status:** accepted (Phase 4, follow-up to step 6)
+
+**Context.** ADR-0030 recorded a live comparison that went against the agent: it
+routed well, gathered more evidence, and answered worse than plain RAG. The
+leading hypothesis was ordering. The plain path hands the answer model a set
+ranked against each other by a cross-encoder over one candidate pool; the agent
+handed it a rank interleave, a rule deliberately agnostic about cross-search
+quality because cross-encoder scores are unnormalised per-query logits and
+genuinely are not comparable between searches (ADR-0020).
+
+**Decision.** After the loop finishes, the deduplicated union of everything it
+found is reranked **once**, against the **original user question**, and the
+result is capped at `agent_max_evidence`.
+
+Reranking against the user's question rather than the agent's sub-queries is the
+point: that is the only question the answer is judged against. It also makes the
+scores comparable by construction instead of by assumption — one query, one
+pass, one scale.
+
+What this does not touch: dense and lexical retrieval, the reranker
+implementation, the grounded answering path, the agent's bounds, and the plain
+path, which does no union rerank and is unchanged. The cap moved to *after*
+ordering so it keeps the globally best passages rather than the best of an
+ordering that was never meant to be compared. `agent_union_rerank` exists so the
+two behaviours can be run against each other rather than the fix being assumed.
+
+Provenance survives: identity, offsets and text are untouched, the first-stage
+score stays in `component_scores`, and the new score is recorded under
+`union_rerank`. Ties break on chunk id so an ordering never depends on which of
+two concurrent searches finished first.
+
+### The diagnostic
+
+Seven questions — the five labelled `multi-doc` cases plus the two from
+ADR-0030 — three arms, two runs. A and B were built from **one gathered plan per
+question**, so the searches are held fixed and the only difference between them
+is the ordering; two independent agent runs would have confounded the ordering
+change with the model choosing different searches.
+
+Coverage across both runs: **plain 26/26, A (interleave) 23/26, B (union
+rerank) 26/26.** Prompt tokens were identical between A and B on every question.
+
+**One difference reproduced** (`step6-refunds`: A cited one document, B cited
+both, twice) and **one did not** (`revocation-and-release`: A scored 1/2 then
+2/2 on identical evidence in identical order — answer-model nondeterminism, not
+ordering). Both are kept in the record; discarding the inconvenient half of a
+small sample is how seven questions get talked into meaning more than they do.
+
+**What this justifies claiming:** B never lost to A, matched plain everywhere,
+and won one reproducible case, at 28–556 ms of extra latency and no extra
+tokens. That is consistent with the ordering hypothesis and cheap enough that
+adopting it does not need to wait for a full measurement.
+
+**What it does not justify claiming:** that answer quality is fixed. Seven
+questions, a metric with demonstrated run-to-run variance, no confidence
+intervals, no paired bootstrap. And the agent still only *matches* plain RAG
+while costing an extra model and several searches — whether agency earns its
+keep at all is the step 8 question, untouched by this.
+
+`agent_max_evidence` is deliberately left alone. The secondary hypothesis — that
+the quantity of evidence hurts — is a separate variable and changing it here
+would have made the ordering result unreadable.
+
+**Reconsider if.** Step 8 shows the agent losing to plain RAG on questions where
+the union rerank ranked the needed passage first, which would move the
+explanation from ordering to the snippet/chunk split of ADR-0028 or to the
+stopping decision itself.
+
+---
+
+## ADR-0032: Step 8 — agent mode matches plain RAG; recommendation is opt-in, not default
+
+**Status:** accepted (Phase 4, step 8)
+
+**Context.** ADR-0030 found the agent answering worse than plain RAG on two
+questions. ADR-0031 fixed the likely cause (evidence ordering) and a 7-question
+diagnostic suggested the fix worked. Neither was a measurement across the
+labelled eval set, and a diagnostic built to confirm one hypothesis is not a
+substitute for one built to test whether the whole feature is worth having.
+
+**Method.** `scripts/evaluate_agent.py` (harness in `atlas.eval.agent_compare`,
+new and separate from `EvalRunner` — see that module's docstring for why)
+ran both systems, paired, on all 112 questions of `eval/datasets/main.jsonl`,
+against the shipped configuration: dense+rerank retrieval, `gemini-3.1-flash-lite`
+routing, `gemini-3.5-flash-lite` answering, the ADR-0031 union rerank, unmodified
+bounds. Quality is scored by whether a question's gold labels are satisfied by a
+**cited** chunk, not merely a retrieved one — stricter than the existing
+"produced a citation" check, and the reason a new metric was needed rather than
+reusing `EvalRunner`'s as-is.
+
+**Result.** Of 100 answerable questions, **96 scored identically** between the
+two systems. Of the 4 that differed: 2 agent wins, 2 agent losses — exactly
+even. Overall paired delta: **−0.005, CI [−0.04, 0.03]**, crossing zero. Every
+per-kind breakdown also crosses zero. Refusal correctness was identical (12/12
+unanswerable correctly refused, 0/100 wrongly refused, both systems) and
+unverified-quote counts were identical (6 vs 6) — the grounded answering path
+behaved the same regardless of which evidence-gathering method fed it, which is
+exactly what ADR-0030's design (one answering path, two ways of choosing
+evidence) was for.
+
+Zero errors and zero degraded runs across 100 live agent executions. The system
+is robust; the question this ADR answers is about value, not reliability.
+
+**Cost is not close.** $1.40 per 1000 questions against $0.79 — **1.8×**.
+Latency: p50 5132ms vs 3286ms, p95 7050ms vs 4286ms — 56–64% slower.
+
+**The one suggestive result.** `refund-window-by-plan`, a genuine multi-document
+question, is where plain RAG missed one of two required documents (0.5) and the
+agent's second search reached both (1.0) — the exact failure mode
+(Recall@1 = 0.400 on multi-document queries) that motivated building the agent
+in Phase 2. Consistent with the original hypothesis, from **one instance out of
+five multi-doc questions**, which is not a basis for a claim, only for not
+discarding the hypothesis.
+
+**The two losses were investigated rather than left as a number.** Both are
+`paraphrase`-kind. One (`revocation-delay`) is not a retrieval defect: the
+correct document ranked first in the union rerank, and the answer model cited a
+different, genuinely relevant document instead of the labelled one — a citation
+choice, not a miss. The other (`queue-first-checks`) is a real retrieval-depth
+gap: the right document filled 3 of 7 evidence slots but the specific labelled
+line was in a section none of the searches surfaced. Two examples, not a
+pattern; recorded as material for whoever investigates further, not as a
+demonstrated weakness of agent mode generally.
+
+**Decision: agent mode ships opt-in and stays opt-in.** It is not promoted to
+default, and Step 7 (`query_metadata`) is not started on the strength of this
+result. The reasoning:
+
+- No measured quality gain justifies 1.8× cost and ~60% more latency on this
+  corpus and this question set.
+- The one place agent mode shows promise (multi-document questions) is
+  measured from five instances — too few to act on, and exactly the kind of
+  claim this project's stated rule (verify, do not assume) exists to prevent.
+- Nothing about this result is a defect. It is a well-built feature whose
+  benefit, if real, is concentrated in a slice of questions this dataset is too
+  small to characterise.
+
+**What would change this.** A larger, purpose-built multi-document eval set
+(the current one has five such questions total) showing a paired delta whose
+CI excludes zero. Short of that, agent mode remains available, tested, and
+not the default path — which is what "opt-in" has meant since ADR-0029.
+
+**Reconsider if.** A user-facing need for genuinely multi-hop questions
+materialises at a scale where 1.8× cost is worth measuring against, or a future
+tool (`query_metadata` or otherwise) changes what the agent can do enough that
+this comparison should be re-run rather than trusted as still current.

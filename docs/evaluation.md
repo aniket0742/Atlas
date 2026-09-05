@@ -354,6 +354,62 @@ respectable:
   structurally (citation resolution, quote verification); usefulness is not
   measured.
 
+## Answer-model selection (Phase 4)
+
+The first time `--with-answers` was ever run. Until this point every claim about
+refusal correctness and citation validity described code that had never been
+executed end to end.
+
+Retrieval held constant (same retriever, dense + rerank), 112 queries, only the
+answer model varied. Frozen in
+[`eval/baselines/answer-models/`](../eval/baselines/answer-models).
+
+| model | refused OK | wrongly refused | cited | unverified | p50 | $/1k Q |
+|---|---|---|---|---|---|---|
+| gemini-3.1-flash-lite | 12/12 | 0 | 100/100 | 14 | 2,254 ms | $0.54 |
+| **gemini-3.5-flash-lite** | 12/12 | 0 | 100/100 | 3 | 2,507 ms | **$0.71** |
+| gemini-3.7-flash | 12/12 | 0 | 100/100 | 2 | 3,016 ms | $2.44 |
+| gemini-3.8-flash | 12/12 | 0 | 100/100 | 1 | 3,968 ms | $2.83 |
+
+**The guarantees hold.** Every model refused all 12 unanswerable questions,
+wrongly refused none of the 100 answerable ones, and produced a resolvable
+citation on every answer. The groundedness machinery from
+[ADR-0010](../Decision.md) works, and that is now measured rather than asserted.
+
+### One run cannot rank these
+
+`gemini-3.5-flash-lite` produced **5, then 8, then 3** unverified quotes across
+three runs of the same configuration. That spread is wider than most differences
+between models, so a single-run table is noise dressed as a ranking.
+
+Paired bootstrap on per-query counts, against the selected default:
+
+| model | delta | paired 95% CI | verdict |
+|---|---|---|---|
+| gemini-3.1-flash-lite | +0.098 | [+0.045, +0.161] | **significantly worse** |
+| gemini-3.7-flash | −0.009 | [−0.027, +0.000] | no measured difference |
+| gemini-3.8-flash | −0.018 | [−0.045, +0.000] | no measured difference |
+
+`gemini-3.5-flash-lite` is selected because nothing measurably beats it, not
+because it is cheapest. Reading the first single-run table literally would have
+produced the opposite conclusion from noise — the same error
+[ADR-0021](../Decision.md) exists to prevent.
+
+### Cost accounting was wrong, and the fix mattered
+
+Cost was previously derived from a total token count split 85/15
+input:output — the summary carried no breakdown. That was wrong by 15–35%,
+understating `gemini-3.8-flash` most.
+
+The reason is in the data: `3.7` and `3.8` emit **3–4× more output tokens** than
+the lite models on *identical* input (141,584 tokens for all four), because they
+generate thinking tokens. Those bill as output and never appear in the response
+text, so a blended ratio cannot see them. Input and output are now measured and
+priced separately, with thinking folded into output.
+
+That identical input figure is also the check that retrieval really was held
+constant, rather than assumed to be.
+
 ## Planned experiments
 
 Recorded here in advance so results are not selected after the fact.
@@ -370,6 +426,8 @@ Recorded here in advance so results are not selected after the fact.
 | E8 | Is a larger embedding model worth it? | deferred — `bge-small` vs alternatives |
 | E9 | Why is lexical retrieval best on conceptual queries? | open — unexplained result from E5 |
 | E10 | Can anything help multi-document queries? | open — stuck at 0.400 for every configuration tested |
+| E11 | Which model should write the answer? | **done** — no measurable gain above `3.5-flash-lite` ([ADR-0024](../Decision.md)) |
+| E12 | Which model should route agent tool calls? | **done** — every candidate scored 8/8; benchmark saturated, chose on latency and cost |
 
 E9 and E10 were raised *by* the Phase 2 results rather than planned, and are
 recorded so they are not quietly forgotten.

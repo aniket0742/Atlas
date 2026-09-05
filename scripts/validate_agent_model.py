@@ -62,13 +62,13 @@ PRICING = {
 # gemini-3.5-flash is included only as the incumbent reference. It is strictly
 # dominated on price -- 2x input and 2.4x output against gemini-3.8-flash, which
 # the vendor describes as a newer and more capable model.
+# Narrowed to the plausible agent models. gemini-3.5-flash is excluded as
+# strictly dominated (ADR-0024); 3.6 and 3.8 behaved like 3.7 on the first run
+# at similar or worse cost.
 CANDIDATES = [
     "gemini-3.1-flash-lite",
     "gemini-3.5-flash-lite",
-    "gemini-3.6-flash",
     "gemini-3.7-flash",
-    "gemini-3.8-flash",
-    "gemini-3.5-flash",
 ]
 
 SYSTEM = """\
@@ -144,6 +144,58 @@ CASES = [
          "should search, then report nothing found"),
     Case("arithmetic", "What is 37 multiplied by 4?", False, (), "no lookup needed"),
     Case("greeting", "Hello, what are you?", False, (), "no lookup needed"),
+
+    # --- harder cases -------------------------------------------------------
+    # The first eight saturated: every model scored 8/8. A benchmark that
+    # cannot separate candidates cannot justify choosing one, so these probe
+    # the failure modes routing actually has -- vocabulary mismatch between the
+    # question and the corpus, questions that merely look like lookups, and
+    # comparisons that genuinely need two different searches.
+
+    # Corpus says "chargeback"; the question never uses the word. Naive query
+    # formulation (echoing the question) retrieves the wrong section.
+    Case("vocab-chargeback",
+         "A buyer went to their bank to reverse a payment instead of contacting us. "
+         "What happens to their account?", True,
+         ("policies/billing.md",), "vocabulary mismatch"),
+
+    # Corpus says "expand and contract"; question uses none of those words.
+    Case("vocab-migration",
+         "How do we ship a database change that the currently running code would "
+         "choke on?", True,
+         ("engineering/database-migrations.md",), "vocabulary mismatch"),
+
+    # General knowledge dressed up in company phrasing. Searching is waste.
+    Case("general-knowledge",
+         "In general, what does the acronym HMAC stand for?", False, (),
+         "looks like a lookup, is not"),
+
+    # The answer is contained in the question itself.
+    Case("self-answering",
+         "If a runbook says to wait five minutes before failing over, how long "
+         "should I wait?", False, (), "answer is in the question"),
+
+    # Two unrelated areas; one query cannot cover both.
+    Case("cross-domain",
+         "Compare how long we keep audit logs with how long we keep query text.",
+         True,
+         ("engineering/data-retention.md", "policies/privacy.md"),
+         "multi-document"),
+
+    # Requires connecting a symptom to a cause across two documents.
+    Case("symptom-to-cause",
+         "Our webhook signatures started failing after we added emoji support. "
+         "Why, and what is the retry schedule we are now hitting?", True,
+         ("engineering/webhooks.md",), "multi-hop within a document"),
+
+    # Plausible-sounding but absent; the near-miss is topically adjacent.
+    Case("unanswerable-sso",
+         "Do we support SAML single sign-on?", True, (),
+         "should search, then report nothing found"),
+
+    # Terse, underspecified. Tests whether it asks the corpus something useful.
+    Case("terse", "token lifetime?", True,
+         ("engineering/authentication.md",), "terse query formulation"),
 ]
 
 

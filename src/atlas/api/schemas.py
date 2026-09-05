@@ -111,6 +111,12 @@ class QueryRequest(BaseModel):
         description="Return the full retrieved chunks, not just citations. Useful "
         "for debugging retrieval; verbose for normal use.",
     )
+    agent: bool = Field(
+        default=False,
+        description="Let a model plan the retrieval: decompose the question, "
+        "search several times, then answer from everything it found. Costs more "
+        "and takes longer. Off by default, so the plain path is unchanged.",
+    )
 
 
 class CitationOut(BaseModel):
@@ -171,6 +177,12 @@ class QueryResponse(BaseModel):
     evidence: list[EvidenceOut] | None = None
     usage: UsageOut
     timings_ms: dict[str, float]
+    agent_trace: dict[str, Any] | None = Field(
+        default=None,
+        description="How an agentic answer's evidence was gathered: the searches "
+        "run, the stop reason, and whether it degraded to plain retrieval. Null "
+        "for non-agent queries.",
+    )
 
 
 class HealthResponse(BaseModel):

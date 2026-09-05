@@ -20,6 +20,10 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request,
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from atlas.agent.knowledge_base import SearchKnowledgeBaseTool
+from atlas.agent.loop import AgentPlanner
+from atlas.agent.service import AgentAnswerService
+from atlas.agent.tools import ToolContext, ToolRegistry
 from atlas.answer.service import AnswerService
 from atlas.api import schemas
 from atlas.config import Settings, get_settings
@@ -30,7 +34,7 @@ from atlas.db.pool import Database
 from atlas.ingest.parsers import UnparseableDocument, UnsupportedDocument
 from atlas.ingest.pipeline import Ingestor
 from atlas.providers.base import LLMError, LLMTimeout
-from atlas.providers.factory import get_embedder, get_llm, get_reranker
+from atlas.providers.factory import get_agent_llm, get_embedder, get_llm, get_reranker
 from atlas.retrieval.service import Retriever
 
 logger = logging.getLogger(__name__)
@@ -64,6 +68,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.answerer = AnswerService(db, retriever, llm, settings)
     app.state.llm = llm
     app.state.reranker = reranker
+    # Built once at startup. The registry's checks -- reserved argument names,
+    # a provider-callable name, an Args model that forbids extras -- therefore
+    # run at boot, so a tool that violates the authorization boundary fails the
+    # process rather than the request that first exercises it. Tools are
+    # stateless and shared across concurrent requests; per-request identity
+    # travels in ToolContext.
+    tools = ToolRegistry([SearchKnowledgeBaseTool(retriever)])
+    app.state.tools = tools
+    # A separate model instance: the agent runs a different, cheaper model from
+    # the one that writes answers (ADR-0024). Both talk to the same API key.
+    agent_llm = get_agent_llm(settings)
+    app.state.agent = AgentAnswerService(
+        AgentPlanner(agent_llm, tools, settings),
+        app.state.answerer,
+        settings,
+        reranker=reranker,
+    )
 
     # Resolve (and create on first boot) the tenant every request is attributed
     # to, so request handling never has to branch on "does the tenant exist".
@@ -126,8 +147,31 @@ def current_tenant(request: Request) -> uuid.UUID:
     return request.app.state.tenant_id
 
 
+def current_tool_context(request: Request) -> ToolContext:
+    """Build the authorization context tools run under.
+
+    Derived entirely from server-side state: the tenant this request was
+    attributed to, and the capabilities that tenant holds. Nothing from the
+    request *body*, the model's output, or a retrieved document reaches it --
+    which is what makes "a document cannot make the agent read another tenant"
+    a structural property rather than a hope.
+
+    Phase 4 has no authentication, so permissions is empty: a caller holds no
+    special capability, and any tool declaring `required_permission` is simply
+    unavailable. Phase 5 replaces the body of this function with claims from the
+    caller's token. Nothing downstream changes, because everything downstream
+    already takes a ToolContext.
+    """
+    return ToolContext(
+        tenant_id=request.app.state.tenant_id,
+        permissions=frozenset(),
+        request_id=request.headers.get("x-request-id"),
+    )
+
+
 DbDep = Annotated[Database, Depends(get_db)]
 TenantDep = Annotated[uuid.UUID, Depends(current_tenant)]
+ToolContextDep = Annotated[ToolContext, Depends(current_tool_context)]
 
 
 # --------------------------------------------------------------------------
@@ -349,6 +393,30 @@ async def get_document(
     return schemas.DocumentDetail(**row)
 
 
+
+def agent_conflicts(body: schemas.QueryRequest) -> list[str]:
+    """Per-request retrieval knobs that agent mode cannot honour.
+
+    They describe a single search. The agent runs several, choosing each one's
+    parameters itself, so there is no coherent way to apply them -- honouring
+    `top_k` on some searches and not others would report a configuration that
+    was never actually used. Rejecting is better than silently ignoring: a
+    caller comparing configurations must not be told a setting applied when it
+    did not.
+    """
+    return [
+        name
+        for name, value in (
+            ("top_k", body.top_k),
+            ("mode", body.mode),
+            ("rerank", body.rerank),
+            ("min_similarity", body.min_similarity),
+            ("source_ids", body.source_ids),
+        )
+        if value is not None
+    ]
+
+
 @app.post(
     "/v1/query",
     response_model=schemas.QueryResponse,
@@ -359,8 +427,30 @@ async def get_document(
     },
 )
 async def query(
-    request: Request, body: schemas.QueryRequest, tenant_id: TenantDep
+    request: Request,
+    body: schemas.QueryRequest,
+    tenant_id: TenantDep,
+    tool_context: ToolContextDep,
 ) -> schemas.QueryResponse:
+    if body.agent:
+        # The agent path ignores the per-request retrieval knobs. They describe
+        # one search, and the agent runs several with parameters it chooses --
+        # honouring `top_k` for some of them and not others would report a
+        # configuration that was never actually used. Rejected rather than
+        # silently dropped, so a caller is never misled about what ran.
+        conflicting = agent_conflicts(body)
+        if conflicting:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{', '.join(conflicting)} cannot be combined with agent=true: "
+                    "the agent chooses its own retrieval parameters per search."
+                ),
+            )
+        agent: AgentAnswerService = request.app.state.agent
+        result = await agent.answer(body.question, tool_context)
+        return _to_query_response(result, include_evidence=body.include_evidence)
+
     answerer: AnswerService = request.app.state.answerer
     result = await answerer.answer(
         tenant_id,
@@ -425,4 +515,5 @@ def _to_query_response(result: Answer, *, include_evidence: bool) -> schemas.Que
             total_tokens=result.usage.total_tokens,
         ),
         timings_ms={k: round(v, 2) for k, v in result.timings_ms.items()},
+        agent_trace=result.agent_trace,
     )

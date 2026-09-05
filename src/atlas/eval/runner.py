@@ -49,6 +49,11 @@ class QueryReport:
     citation_count: int | None = None
     unverified_quotes: int | None = None
     total_tokens: int | None = None
+    # Split out because cost is priced differently per direction. Thinking
+    # tokens are billed as OUTPUT and are invisible in the response text, so
+    # folding them into output is required for the figure to be honest.
+    input_tokens: int | None = None
+    output_tokens: int | None = None
     latency_ms: float | None = None
     answer_error: str | None = None
 
@@ -214,6 +219,8 @@ class EvalRunner:
             report.citation_count = len(answer.citations)
             report.unverified_quotes = sum(1 for c in answer.citations if not c.quote_verified)
             report.total_tokens = answer.usage.total_tokens
+            report.input_tokens = answer.usage.prompt_tokens
+            report.output_tokens = answer.usage.output_tokens + answer.usage.thinking_tokens
 
         return report
 
@@ -294,8 +301,12 @@ class EvalRunner:
                     "p95": round(latencies[min(len(latencies) - 1, int(len(latencies) * 0.95))], 1),
                     "max": round(latencies[-1], 1),
                 }
+            # Input and output are reported separately because they are priced
+            # separately; a single total cannot produce a correct cost figure.
             summary["tokens"] = {
                 "total": sum(r.total_tokens or 0 for r in reports),
+                "input": sum(r.input_tokens or 0 for r in reports),
+                "output": sum(r.output_tokens or 0 for r in reports),
             }
             failed = [r for r in reports if r.answer_error]
             summary["answer_failures"] = {

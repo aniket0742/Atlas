@@ -107,6 +107,39 @@ class Settings(BaseSettings):
     # scripts/validate_agent_model.py and ADR-0024.
     agent_model: str = "gemini-3.1-flash-lite"
 
+    # --- Agent loop -------------------------------------------------------
+    # Opt-in per request; plain RAG is unchanged when it is off.
+    #
+    # Four bounds, because each catches something the others miss. Defaults are
+    # starting points chosen from the observed shape of the corpus, not measured
+    # optima -- step 8's evaluation is what makes them falsifiable.
+    #
+    # Iterations: the hard queries need a search, a look, and a follow-up. Four
+    # leaves room for one recovery from a bad first search without paying for a
+    # model that will not settle.
+    agent_max_iterations: int = 4
+    # Total tool calls across all iterations. An iteration cap alone does not
+    # bound the work, because one turn may request several calls at once.
+    agent_max_tool_calls: int = 8
+    # Wall clock for the whole loop, checked before each new step. Generous
+    # against a single search (~1s with reranking) because it must cover several
+    # model round-trips, including a retry after a 429.
+    agent_budget_seconds: float = 60.0
+    # Passages handed to the answer model after the loop finishes. Eight tool
+    # calls of ten passages each can gather far more than helps: past some point
+    # extra evidence costs tokens and gives the answer model more irrelevant
+    # material to be distracted by. 12 is 1.5x the plain path's top_k of 8, on
+    # the reasoning that a multi-part question legitimately needs more than a
+    # single-part one -- a starting point, not a measured optimum.
+    agent_max_evidence: int = 12
+    # Rerank the deduplicated union of everything the agent found, once, against
+    # the original question before answering. Scores from separate searches are
+    # not comparable (ADR-0020), so without this the answer model receives a set
+    # ordered by a rule deliberately agnostic about cross-search quality. Kept
+    # as a switch so the two can be compared directly rather than the fix being
+    # assumed to work. See ADR-0030 and ADR-0031.
+    agent_union_rerank: bool = True
+
     # --- Ingestion workers ------------------------------------------------
     # Jobs claimed and run concurrently per worker process. Embedding releases
     # the GIL inside ONNX Runtime so these overlap, but beyond the core count

@@ -151,6 +151,18 @@ atlas models                    # lists what your key can actually reach
 
 Set `ATLAS_LLM_MODEL` in `.env` to one of those.
 
+**After changing `.env`, recreate the containers — do not restart them:**
+
+```bash
+docker compose up -d --force-recreate api worker
+```
+
+`env_file` is read when a container is *created*, not when it starts. `docker
+compose restart` reuses the existing container with its original environment, so
+code changes appear (the source is bind-mounted) while configuration changes
+silently do not. The symptom is confusing: the console keeps reporting the old
+model and the old API key while `.env` clearly says otherwise.
+
 ### Index and ask
 
 ```bash
@@ -289,6 +301,13 @@ are wide enough to say so. Overlapping intervals mean no measured difference.
 | hybrid (RRF) | 0.720 | 0.881 | 70 ms | no — no measured difference |
 | **dense + rerank** | **0.850** | **0.939** | 750 ms | **yes** |
 | hybrid + rerank | 0.850 | 0.935 | 758 ms | no — hybrid adds nothing here |
+
+**Answer quality**, measured on the same 112 queries with retrieval held
+constant (`eval/baselines/answer-models/`): every candidate model refused 12/12
+unanswerable questions, wrongly refused 0 of 100 answerable ones, and produced a
+resolvable citation on 100/100 answers. Models differ only in verbatim-quoting
+fidelity, and `gemini-3.8-flash` is **not measurably better** than the selected
+`gemini-3.5-flash-lite` at 4x the cost ([ADR-0024](Decision.md)).
 
 Comparisons use a **paired** bootstrap over per-query differences, not overlap of
 independent intervals. The rule registered before the experiments used the

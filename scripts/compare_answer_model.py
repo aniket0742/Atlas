@@ -46,6 +46,11 @@ DATASET = Path("eval/datasets/main.jsonl")
 PRICING = {
     "gemini-3.1-flash-lite": (0.25, 1.50),
     "gemini-3.5-flash-lite": (0.30, 2.50),
+    # 3.7 and 3.8 are the same price. 3.7 is included because the vendor
+    # describes it as built for "reliable multi-step execution" -- worth
+    # measuring even though answering is structured extraction rather than tool
+    # use, since the claim is about instruction-following reliability.
+    "gemini-3.7-flash": (0.75, 3.75),
     "gemini-3.8-flash": (0.75, 3.75),
 }
 CANDIDATES = list(PRICING)
@@ -99,28 +104,33 @@ async def main() -> None:
               f"concurrency={settings.eval_concurrency}")
         print("=" * 104)
         header = (f"{'model':<24}{'refused OK':>12}{'wrong refuse':>14}"
-                  f"{'cited':>10}{'unverified':>12}{'p50 ms':>9}{'$/1k Q':>9}")
+                  f"{'cited':>10}{'unverified':>12}{'p50 ms':>9}"
+                  f"{'in tok':>9}{'out tok':>9}{'$/1k Q':>9}")
         print(header)
         print("-" * len(header))
         for model, report, serial_p50 in rows:
             s = report["summary"]
             r, c = s["refusal"], s["citations"]
             lat = serial_p50
-            # Token totals are summed across every answered query in the run.
-            total_tok = s["tokens"]["total"]
+            # Real per-direction token counts, not a blended ratio. Input and
+            # output are priced differently -- often by 5-10x -- so a single
+            # total cannot produce a correct figure. Thinking tokens are already
+            # folded into output by the runner, since that is how they bill.
+            tokens = s["tokens"]
+            in_tok, out_tok = tokens["input"], tokens["output"]
             n = report["dataset"]["queries"]
-            # Split unavailable in the summary; approximate with the observed
-            # ~85/15 input:output ratio measured on this pipeline.
             in_price, out_price = PRICING[model]
-            cost = (total_tok * 0.85 * in_price + total_tok * 0.15 * out_price) / 1e6 / n
+            cost = (in_tok * in_price + out_tok * out_price) / 1e6 / n
             refused = f"{r['correctly_refused']}/{r['unanswerable_queries']}"
             cited = f"{c['answers_with_citations']}/{c['answers_scored']}"
             print(f"{model:<24}{refused:>12}{r['incorrectly_refused']:>14}"
                   f"{cited:>10}{c['unverified_quotes']:>12}"
-                  f"{lat:>9.0f}{cost * 1000:>9.2f}")
+                  f"{lat:>9.0f}{in_tok:>9}{out_tok:>9}{cost * 1000:>9.2f}")
         print("\nrefused OK   = unanswerable queries correctly refused (higher better)")
         print("wrong refuse = answerable queries wrongly refused (lower better)")
         print("unverified   = citations whose quote was not found verbatim (lower better)")
+        print("in/out tok   = actual measured totals across the run, priced separately")
+        print("$/1k Q       = (input x input_price + output x output_price) per 1000 queries")
     finally:
         await db.close()
 

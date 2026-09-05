@@ -30,6 +30,7 @@ import logging
 import re
 import time
 import uuid
+from typing import Any
 
 from atlas.answer.prompts import SYSTEM_INSTRUCTION, AnswerOut, build_prompt
 from atlas.config import Settings
@@ -105,26 +106,71 @@ class AnswerService:
         }
         timings = dict(retrieval.timings_ms)
 
+        no_evidence_reason = None
         if not retrieval.chunks:
             best = retrieval.candidates[0].score if retrieval.candidates else None
-            reason = (
+            no_evidence_reason = (
                 "no_candidates"
                 if not retrieval.candidates
                 else f"below_similarity_floor (best={best:.3f})"
             )
+
+        return await self.answer_from_evidence(
+            tenant_id,
+            question,
+            retrieval.chunks,
+            started=started,
+            timings=timings,
+            provenance=provenance,
+            no_evidence_reason=no_evidence_reason,
+        )
+
+    async def answer_from_evidence(
+        self,
+        tenant_id: uuid.UUID,
+        question: str,
+        chunks: list[RetrievedChunk],
+        *,
+        started: float | None = None,
+        timings: dict[str, float] | None = None,
+        provenance: dict[str, Any] | None = None,
+        no_evidence_reason: str | None = None,
+    ) -> Answer:
+        """Generate a grounded answer from evidence that is already chosen.
+
+        Split out so the agent path can reach it. Everything that makes an
+        answer trustworthy lives below this line -- the evidence blocks, the
+        server-generated ids, citation resolution, quote verification, the
+        refusal downgrade -- and the agent must not get a shortened version of
+        any of it.
+
+        The agent's contribution ends at deciding *which* chunks arrive here. It
+        does not get to influence how they are presented to the answer model,
+        how citations are validated, or when an answer is downgraded to a
+        refusal. That is the whole reason this is one function with two callers
+        rather than two answering paths.
+        """
+        started = time.perf_counter() if started is None else started
+        timings = dict(timings or {})
+        provenance = dict(provenance or {})
+
+        if not chunks:
+            # Never reaches the model: with no evidence there is nothing to be
+            # faithful to, so refusing directly is more reliable and one fewer
+            # call against a rate-limited API.
             timings["total_ms"] = (time.perf_counter() - started) * 1000
             return Answer(
                 text=NO_EVIDENCE_MESSAGE,
                 citations=[],
                 refused=True,
-                refusal_reason=reason,
+                refusal_reason=no_evidence_reason or "no_candidates",
                 retrieved=[],
                 usage=TokenUsage(),
                 timings_ms=timings,
                 **provenance,
             )
 
-        prompt = build_prompt(question, retrieval.chunks)
+        prompt = build_prompt(question, chunks)
 
         t0 = time.perf_counter()
         try:
@@ -135,7 +181,7 @@ class AnswerService:
         timings["llm_ms"] = (time.perf_counter() - t0) * 1000
 
         citations, unresolved = await self._validate_citations(
-            tenant_id, parsed.citations, retrieval.chunks
+            tenant_id, parsed.citations, chunks
         )
 
         refused = not parsed.sufficient_evidence
@@ -161,7 +207,7 @@ class AnswerService:
             citations=citations,
             refused=refused,
             refusal_reason=refusal_reason,
-            retrieved=retrieval.chunks,
+            retrieved=chunks,
             usage=usage,
             timings_ms=timings,
             **provenance,

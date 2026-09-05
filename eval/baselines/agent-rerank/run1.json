@@ -1,0 +1,650 @@
+[
+ {
+  "id": "downgrade-and-closure-retention",
+  "arm": "plain",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "engineering/data-retention.md",
+   "policies/billing.md"
+  ],
+  "expected_documents": [
+   "engineering/data-retention.md",
+   "policies/billing.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1158,
+  "output_tokens": 207,
+  "total_ms": 3550,
+  "evidence_order": [],
+  "answer": "For an account that was downgraded due to a failed payment, data is retained for 90 days after the downgrade. For an account that was closed, data is retained for 90 days after account closure and then deleted."
+ },
+ {
+  "id": "downgrade-and-closure-retention",
+  "arm": "A-interleave",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "engineering/data-retention.md",
+   "policies/billing.md"
+  ],
+  "expected_documents": [
+   "engineering/data-retention.md",
+   "policies/billing.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 845,
+  "output_tokens": 206,
+  "total_ms": 1360,
+  "evidence_order": [
+   "policies/billing.md",
+   "engineering/data-retention.md",
+   "security/vulnerability-disclosure.md",
+   "policies/refunds-enterprise.md",
+   "policies/privacy.md"
+  ],
+  "answer": "For an account downgraded after a failed payment and subsequent grace period, data is retained for 90 days after the downgrade. For a closed account, data is retained for 90 days after account closure and then deleted.",
+  "searches": [
+   "data retention policy downgraded account non-payment vs closed account"
+  ],
+  "union_size": 5,
+  "rerank_ms": 0.0
+ },
+ {
+  "id": "downgrade-and-closure-retention",
+  "arm": "B-union-rerank",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "engineering/data-retention.md",
+   "policies/billing.md"
+  ],
+  "expected_documents": [
+   "engineering/data-retention.md",
+   "policies/billing.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 845,
+  "output_tokens": 205,
+  "total_ms": 1819,
+  "evidence_order": [
+   "policies/billing.md",
+   "engineering/data-retention.md",
+   "policies/privacy.md",
+   "security/vulnerability-disclosure.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "answer": "For an account downgraded due to a failed payment, data is retained for 90 days after the downgrade. For an account that was closed, data is retained for 90 days after account closure and then deleted.",
+  "searches": [
+   "data retention policy downgraded account non-payment vs closed account"
+  ],
+  "union_size": 5,
+  "rerank_ms": 33.0
+ },
+ {
+  "id": "revocation-and-release",
+  "arm": "plain",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "engineering/authentication.md",
+   "product/release-notes-2026-q1.md"
+  ],
+  "expected_documents": [
+   "engineering/authentication.md",
+   "product/release-notes-2026-q1.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1311,
+  "output_tokens": 287,
+  "total_ms": 2476,
+  "evidence_order": [],
+  "answer": "Yes, it is by design that a revoked access token remains usable until it expires, up to 15 minutes, because access tokens are validated statelessly at the edge. A release note also addresses this: previously, session revocation did not invalidate the token family in cache, allowing a revoked session to survive up to 15 minutes, but v2.4.1 made revocation immediate for refresh."
+ },
+ {
+  "id": "revocation-and-release",
+  "arm": "A-interleave",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "product/release-notes-2026-q1.md"
+  ],
+  "expected_documents": [
+   "engineering/authentication.md",
+   "product/release-notes-2026-q1.md"
+  ],
+  "documents_covered": "1/2",
+  "citations": 1,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1754,
+  "output_tokens": 257,
+  "total_ms": 1652,
+  "evidence_order": [
+   "engineering/authentication.md",
+   "product/release-notes-2026-q1.md",
+   "onboarding/access-requests.md",
+   "product/release-notes-2026-q2.md",
+   "policies/acceptable-use.md",
+   "product/release-notes-2026-q1.md",
+   "product/release-notes-2026-q1.md",
+   "engineering/authentication.md",
+   "engineering/webhooks.md",
+   "engineering/database-migrations.md"
+  ],
+  "answer": "Yes, it is by design that access tokens remain valid until expiry. Revocation is immediate for refresh, though access tokens remain valid until expiry by design. Version v2.4.1 changed this area by ensuring that session revocation successfully invalidates the token family in cache, whereas previously a revoked session could survive up to 15 minutes because it failed to do so.",
+  "searches": [
+   "revoked session still worked",
+   "session revocation delay design",
+   "release notes session revocation change"
+  ],
+  "union_size": 10,
+  "rerank_ms": 0.0
+ },
+ {
+  "id": "revocation-and-release",
+  "arm": "B-union-rerank",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "engineering/authentication.md",
+   "product/release-notes-2026-q1.md"
+  ],
+  "expected_documents": [
+   "engineering/authentication.md",
+   "product/release-notes-2026-q1.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1754,
+  "output_tokens": 281,
+  "total_ms": 1984,
+  "evidence_order": [
+   "product/release-notes-2026-q1.md",
+   "engineering/authentication.md",
+   "onboarding/access-requests.md",
+   "engineering/database-migrations.md",
+   "product/release-notes-2026-q1.md",
+   "policies/acceptable-use.md",
+   "engineering/authentication.md",
+   "product/release-notes-2026-q1.md",
+   "product/release-notes-2026-q2.md",
+   "engineering/webhooks.md"
+  ],
+  "answer": "Yes, it is by design that a revoked access token remains usable until it expires (up to 15 minutes) because access tokens are validated statelessly at the edge. A release did change how session revocation is handled: version 2.4.1 fixed an issue where session revocation did not invalidate the token family in cache, making revocation now immediate for refresh tokens.",
+  "searches": [
+   "revoked session still worked",
+   "session revocation delay design",
+   "release notes session revocation change"
+  ],
+  "union_size": 10,
+  "rerank_ms": 86.3
+ },
+ {
+  "id": "refund-window-by-plan",
+  "arm": "plain",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "expected_documents": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1207,
+  "output_tokens": 228,
+  "total_ms": 2374,
+  "evidence_order": [],
+  "answer": "Yes, the refund window depends on the plan. Enterprise customers may request a refund within 90 days of an invoice date, while self-serve plans have a 30-day refund window from the original purchase date."
+ },
+ {
+  "id": "refund-window-by-plan",
+  "arm": "A-interleave",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "expected_documents": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 990,
+  "output_tokens": 233,
+  "total_ms": 1395,
+  "evidence_order": [
+   "policies/billing.md",
+   "policies/billing.md",
+   "policies/refunds-enterprise.md",
+   "policies/refunds-enterprise.md",
+   "engineering/sdk-python.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "answer": "Yes, the refund window depends on the plan. Customers on self-serve plans may request a full refund within 30 days of the original purchase date. In contrast, enterprise customers may request a refund within 90 days of an invoice date.",
+  "searches": [
+   "refund policy window",
+   "refund policy plan differences"
+  ],
+  "union_size": 6,
+  "rerank_ms": 0.0
+ },
+ {
+  "id": "refund-window-by-plan",
+  "arm": "B-union-rerank",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "expected_documents": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 990,
+  "output_tokens": 228,
+  "total_ms": 1686,
+  "evidence_order": [
+   "policies/refunds-enterprise.md",
+   "policies/billing.md",
+   "policies/billing.md",
+   "engineering/sdk-python.md",
+   "policies/refunds-enterprise.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "answer": "Yes, the refund window depends on the plan. Enterprise customers may request a refund within 90 days of an invoice date, whereas self-serve plans have a 30-day refund window from the original purchase date.",
+  "searches": [
+   "refund policy window",
+   "refund policy plan differences"
+  ],
+  "union_size": 6,
+  "rerank_ms": 31.4
+ },
+ {
+  "id": "retention-privacy-vs-eng",
+  "arm": "plain",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "engineering/data-retention.md",
+   "policies/privacy.md"
+  ],
+  "expected_documents": [
+   "engineering/data-retention.md",
+   "policies/privacy.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1176,
+  "output_tokens": 210,
+  "total_ms": 2279,
+  "evidence_order": [],
+  "answer": "After account closure, customer data is retained for 90 days and then deleted. Regarding backups, deleted data is not selectively edited out of backups, but instead ages out of backups on the normal backup retention schedule."
+ },
+ {
+  "id": "retention-privacy-vs-eng",
+  "arm": "A-interleave",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "engineering/data-retention.md",
+   "policies/privacy.md"
+  ],
+  "expected_documents": [
+   "engineering/data-retention.md",
+   "policies/privacy.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 3,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1032,
+  "output_tokens": 291,
+  "total_ms": 1763,
+  "evidence_order": [
+   "engineering/data-retention.md",
+   "policies/billing.md",
+   "engineering/data-retention.md",
+   "engineering/data-retention.md",
+   "policies/privacy.md",
+   "policies/privacy.md",
+   "policies/privacy.md"
+  ],
+  "answer": "After account closure, customer data is retained for 90 days and then deleted. When data is deleted, backups are not selectively edited; instead, deleted data ages out of backups on the normal backup retention schedule (which is 35 days for nightly database backups).",
+  "searches": [
+   "customer data retention period after account closure",
+   "data retention backups account closure"
+  ],
+  "union_size": 7,
+  "rerank_ms": 0.0
+ },
+ {
+  "id": "retention-privacy-vs-eng",
+  "arm": "B-union-rerank",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "engineering/data-retention.md",
+   "policies/privacy.md"
+  ],
+  "expected_documents": [
+   "engineering/data-retention.md",
+   "policies/privacy.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1032,
+  "output_tokens": 211,
+  "total_ms": 2036,
+  "evidence_order": [
+   "engineering/data-retention.md",
+   "engineering/data-retention.md",
+   "policies/billing.md",
+   "engineering/data-retention.md",
+   "policies/privacy.md",
+   "policies/privacy.md",
+   "policies/privacy.md"
+  ],
+  "answer": "After account closure, customer data is retained for 90 days and then deleted. Regarding backups, deleted data is not selectively edited out of backups; instead, it ages out of backups on the normal backup retention schedule.",
+  "searches": [
+   "customer data retention period after account closure",
+   "data retention backups account closure"
+  ],
+  "union_size": 7,
+  "rerank_ms": 27.7
+ },
+ {
+  "id": "ratelimit-error-and-header",
+  "arm": "plain",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "engineering/api-errors.md",
+   "engineering/rate-limits.md",
+   "engineering/sdk-python.md"
+  ],
+  "expected_documents": [
+   "engineering/api-errors.md",
+   "engineering/rate-limits.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 3,
+  "unverified_quotes": 2,
+  "prompt_tokens": 1420,
+  "output_tokens": 366,
+  "total_ms": 3798,
+  "evidence_order": [],
+  "answer": "A 429 response corresponds to error code ATL-4029, which indicates that the rate limit was exceeded. Clients should honour the Retry-After header rather than applying their own backoff, because the server knows when the window actually resets. Additionally, the Python SDK retries 429 responses with exponential backoff while honouring Retry-After when present."
+ },
+ {
+  "id": "ratelimit-error-and-header",
+  "arm": "A-interleave",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "engineering/api-errors.md",
+   "engineering/rate-limits.md"
+  ],
+  "expected_documents": [
+   "engineering/api-errors.md",
+   "engineering/rate-limits.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1227,
+  "output_tokens": 284,
+  "total_ms": 1831,
+  "evidence_order": [
+   "engineering/api-errors.md",
+   "engineering/rate-limits.md",
+   "engineering/sdk-python.md",
+   "engineering/api-errors.md",
+   "engineering/api-errors.md",
+   "engineering/database-migrations.md"
+  ],
+  "answer": "A 429 response returns error code ATL-4029. Rejected requests return HTTP 429 with code ATL-4029 and a Retry-After header in seconds. Clients should honour the Retry-After header rather than applying their own backoff, because the server knows when the window actually resets.",
+  "searches": [
+   "\"429\" error code meaning",
+   "how to handle 429 error code"
+  ],
+  "union_size": 6,
+  "rerank_ms": 0.0
+ },
+ {
+  "id": "ratelimit-error-and-header",
+  "arm": "B-union-rerank",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "engineering/api-errors.md",
+   "engineering/rate-limits.md",
+   "engineering/sdk-python.md"
+  ],
+  "expected_documents": [
+   "engineering/api-errors.md",
+   "engineering/rate-limits.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 3,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1227,
+  "output_tokens": 380,
+  "total_ms": 1795,
+  "evidence_order": [
+   "engineering/sdk-python.md",
+   "engineering/rate-limits.md",
+   "engineering/api-errors.md",
+   "engineering/api-errors.md",
+   "engineering/api-errors.md",
+   "engineering/database-migrations.md"
+  ],
+  "answer": "A rate limit exceeded response returns HTTP 429 with error code ATL-4029. Clients should honour the Retry-After header rather than applying their own backoff, because the server knows when the window actually resets. Additionally, the Python SDK automatically retries 429 and 5xx responses with exponential backoff while honouring Retry-After when present.",
+  "searches": [
+   "\"429\" error code meaning",
+   "how to handle 429 error code"
+  ],
+  "union_size": 6,
+  "rerank_ms": 430.9
+ },
+ {
+  "id": "step6-refunds",
+  "arm": "plain",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "expected_documents": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 1,
+  "prompt_tokens": 1220,
+  "output_tokens": 323,
+  "total_ms": 3643,
+  "evidence_order": [],
+  "answer": "For self-serve plans, customers may request a full refund within 30 days of the original purchase date. Refunds requested after 30 days are declined automatically. Support agents cannot override this window; exceptions require written approval from the finance team. For enterprise customers, the refund window is within 90 days of an invoice date."
+ },
+ {
+  "id": "step6-refunds",
+  "arm": "A-interleave",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "policies/billing.md"
+  ],
+  "expected_documents": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "documents_covered": "1/2",
+  "citations": 1,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1109,
+  "output_tokens": 206,
+  "total_ms": 1663,
+  "evidence_order": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md",
+   "policies/refunds-enterprise.md",
+   "engineering/sdk-python.md",
+   "policies/refunds-enterprise.md",
+   "policies/billing.md",
+   "policies/billing.md"
+  ],
+  "answer": "Customers may request a full refund within 30 days of the original purchase date. Support agents cannot override this window; exceptions require written approval from the finance team.",
+  "searches": [
+   "refund window policy",
+   "who approves refund exceptions"
+  ],
+  "union_size": 7,
+  "rerank_ms": 0.0
+ },
+ {
+  "id": "step6-refunds",
+  "arm": "B-union-rerank",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "expected_documents": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "documents_covered": "2/2",
+  "citations": 2,
+  "unverified_quotes": 1,
+  "prompt_tokens": 1109,
+  "output_tokens": 323,
+  "total_ms": 1599,
+  "evidence_order": [
+   "policies/billing.md",
+   "policies/refunds-enterprise.md",
+   "policies/refunds-enterprise.md",
+   "engineering/sdk-python.md",
+   "policies/billing.md",
+   "policies/billing.md",
+   "policies/refunds-enterprise.md"
+  ],
+  "answer": "For self-serve plans, customers may request a full refund within 30 days of the original purchase date. Refunds requested after 30 days are declined automatically. Support agents cannot override this window; exceptions require written approval from the finance team. For enterprise customers, the refund window is within 90 days of an invoice date.",
+  "searches": [
+   "refund window policy",
+   "who approves refund exceptions"
+  ],
+  "union_size": 7,
+  "rerank_ms": 420.5
+ },
+ {
+  "id": "step6-apikey",
+  "arm": "plain",
+  "refused": false,
+  "refusal_reason": null,
+  "cited_documents": [
+   "security/secrets-management.md"
+  ],
+  "expected_documents": [
+   "security/secrets-management.md"
+  ],
+  "documents_covered": "1/1",
+  "citations": 2,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1312,
+  "output_tokens": 209,
+  "total_ms": 3591,
+  "evidence_order": [],
+  "answer": "API signing keys rotate every 180 days with an overlap window so that in-flight tokens remain valid. If a secret is committed or leaks, you should rotate first, then remove."
+ },
+ {
+  "id": "step6-apikey",
+  "arm": "A-interleave",
+  "refused": true,
+  "refusal_reason": "model_reported_insufficient_evidence",
+  "cited_documents": [
+   "security/secrets-management.md"
+  ],
+  "expected_documents": [
+   "security/secrets-management.md"
+  ],
+  "documents_covered": "1/1",
+  "citations": 1,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1059,
+  "output_tokens": 148,
+  "total_ms": 1687,
+  "evidence_order": [
+   "security/secrets-management.md",
+   "engineering/sdk-python.md",
+   "runbooks/runbook-database-failover.md",
+   "engineering/authentication.md",
+   "engineering/api-errors.md",
+   "product/release-notes-2026-q1.md"
+  ],
+  "answer": "API signing keys rotate every 180 days with an overlap window so that in-flight tokens remain valid. The provided evidence does not contain instructions on what to do if an API key leaks.",
+  "searches": [
+   "how to rotate API key",
+   "what to do if API key leaks"
+  ],
+  "union_size": 6,
+  "rerank_ms": 0.0
+ },
+ {
+  "id": "step6-apikey",
+  "arm": "B-union-rerank",
+  "refused": true,
+  "refusal_reason": "model_reported_insufficient_evidence",
+  "cited_documents": [
+   "security/secrets-management.md"
+  ],
+  "expected_documents": [
+   "security/secrets-management.md"
+  ],
+  "documents_covered": "1/1",
+  "citations": 1,
+  "unverified_quotes": 0,
+  "prompt_tokens": 1059,
+  "output_tokens": 148,
+  "total_ms": 1551,
+  "evidence_order": [
+   "security/secrets-management.md",
+   "engineering/sdk-python.md",
+   "runbooks/runbook-database-failover.md",
+   "engineering/api-errors.md",
+   "engineering/authentication.md",
+   "product/release-notes-2026-q1.md"
+  ],
+  "answer": "API signing keys rotate every 180 days with an overlap window so that in-flight tokens remain valid. The provided evidence does not contain information on what to do if an API key leaks.",
+  "searches": [
+   "how to rotate API key",
+   "what to do if API key leaks"
+  ],
+  "union_size": 6,
+  "rerank_ms": 556.2
+ }
+]
