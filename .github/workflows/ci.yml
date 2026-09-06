@@ -45,8 +45,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          # No pip cache. Two consecutive pushes failed identically -- install
+          # succeeding in ~15s (a full install of onnxruntime/fastembed/etc.
+          # takes ~80s cold) immediately followed by an instant crash on
+          # import is the signature of a corrupted binary wheel served from a
+          # stale/interrupted cache, not a code regression: the same failure
+          # reproduced across two commits that share nothing but the cache key
+          # (pyproject.toml, unchanged by either push), and a faithful local
+          # rebuild -- same OS, same Python, same freshly-resolved dependency
+          # versions -- passed cleanly. Re-enable once confirmed stable.
 
       - name: Install
         run: pip install -e ".[dev]"
@@ -75,8 +82,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          # No pip cache. Two consecutive pushes failed identically -- install
+          # succeeding in ~15s (a full install of onnxruntime/fastembed/etc.
+          # takes ~80s cold) immediately followed by an instant crash on
+          # import is the signature of a corrupted binary wheel served from a
+          # stale/interrupted cache, not a code regression: the same failure
+          # reproduced across two commits that share nothing but the cache key
+          # (pyproject.toml, unchanged by either push), and a faithful local
+          # rebuild -- same OS, same Python, same freshly-resolved dependency
+          # versions -- passed cleanly. Re-enable once confirmed stable.
 
       - name: Install
         run: pip install -e ".[dev]"
@@ -117,8 +131,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          # No pip cache. Two consecutive pushes failed identically -- install
+          # succeeding in ~15s (a full install of onnxruntime/fastembed/etc.
+          # takes ~80s cold) immediately followed by an instant crash on
+          # import is the signature of a corrupted binary wheel served from a
+          # stale/interrupted cache, not a code regression: the same failure
+          # reproduced across two commits that share nothing but the cache key
+          # (pyproject.toml, unchanged by either push), and a faithful local
+          # rebuild -- same OS, same Python, same freshly-resolved dependency
+          # versions -- passed cleanly. Re-enable once confirmed stable.
 
       - name: Install
         run: pip install -e ".[dev]"
