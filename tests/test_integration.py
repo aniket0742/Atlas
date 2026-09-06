@@ -30,6 +30,7 @@ import os
 import uuid
 
 import pytest
+from psycopg import AsyncConnection
 
 from atlas.config import Settings
 from atlas.db import repository as repo
@@ -65,10 +66,21 @@ Access tokens are valid for 15 minutes. Refresh tokens rotate on every use.
 
 
 async def _reachable() -> bool:
+    """Can a connection be opened at all -- nothing more.
+
+    Deliberately a raw connection, not `Database.open()`. The pool's connect
+    callback calls `register_vector_async`, which looks up the `vector` type's
+    OID and fails until migration 0001 has run `CREATE EXTENSION vector`. On a
+    freshly created database -- exactly what CI provides, and what no local dev
+    Postgres ever is, since its volume persists already-migrated across
+    sessions -- that made this reachability check depend on the migrations this
+    fixture had not run yet. `apply_all` uses a raw connection for the same
+    reason: migration 0001 must be able to run before the extension it creates
+    exists.
+    """
     try:
-        db = Database(DSN)
-        await db.open()
-        await db.close()
+        async with await AsyncConnection.connect(DSN, connect_timeout=5):
+            pass
         return True
     except Exception:
         return False

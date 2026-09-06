@@ -150,15 +150,24 @@ jobs:
       # reachability check the fixture uses, so if it passes the suite cannot
       # skip, and if it fails the build stops with the real reason.
       - name: Verify Postgres is actually reachable
+        # A raw connection, not atlas.db.pool.Database: its pool registers the
+        # pgvector type on every connect, which needs `CREATE EXTENSION vector`
+        # to have already run -- and that only happens inside the suite's own
+        # migration fixture, which runs *after* this step. Checking through the
+        # full pool made "is Postgres up" depend on "has it been migrated yet",
+        # which is a different question and the one this step is not meant to
+        # ask -- exactly the bug the test suite's own reachability check had
+        # (fixed alongside this; see tests/test_integration.py).
         run: |
           python - <<'PY'
           import asyncio, os, sys
-          from atlas.db.pool import Database
+          from psycopg import AsyncConnection
 
           async def main():
-              db = Database(os.environ["ATLAS_TEST_DATABASE_URL"])
-              await db.open()
-              await db.close()
+              async with await AsyncConnection.connect(
+                  os.environ["ATLAS_TEST_DATABASE_URL"], connect_timeout=5
+              ):
+                  pass
 
           try:
               asyncio.run(main())
@@ -180,10 +189,22 @@ jobs:
         if: always()
         run: |
           python - <<'PY'
+          import pathlib
           import sys
           import xml.etree.ElementTree as ET
 
-          root = ET.parse("integration-results.xml").getroot()
+          path = pathlib.Path("integration-results.xml")
+          if not path.exists():
+              # An earlier step (the precheck, or pytest itself) already failed
+              # and already reported why -- that is the real error. Reporting
+              # a bare FileNotFoundError here on top of it is noise that hides
+              # the actual cause rather than adding to it.
+              sys.exit(
+                  "no results file -- an earlier step already failed the job; "
+                  "see its output above for the real error"
+              )
+
+          root = ET.parse(path).getroot()
           suite = root if root.tag == "testsuite" else root.find("testsuite")
           tests = int(suite.get("tests", 0))
           skipped = int(suite.get("skipped", 0))

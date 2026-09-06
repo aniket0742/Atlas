@@ -429,25 +429,6 @@ could be built properly and measured.
 | **Full tool-trace panel** | deferred | The console shows the agent's searches and stop reason, not a per-tool-event timeline. The trace is returned in full by the API for anyone who wants it. |
 | **Streaming responses** | deferred | `/v1/query` returns one complete response ([ADR-0015](Decision.md)). |
 
-## Roadmap
-
-| Phase | Scope | State |
-|---|---|---|
-| 1 | End-to-end RAG, citations, tenancy in schema, **eval harness** | complete, E1+E2 run |
-| 2 | Lexical + hybrid + reranking, measured against the Phase 1 baseline | complete — reranking adopted, hybrid rejected |
-| 3 | Postgres job queue, workers, retries, DLQ, failure injection | complete |
-| 4 | Tool framework, bounded agent loop, agent-vs-plain evaluation | complete — agent implemented, evaluated, **kept opt-in** |
-| 5 | AuthN/AuthZ, RBAC, rate limiting | not started — see [out of scope](#deliberately-out-of-scope) |
-| 6 | OpenTelemetry, Prometheus, caching, embedding throughput | not started — see [out of scope](#deliberately-out-of-scope) |
-| 7 | Deployment, load testing | not started — see [out of scope](#deliberately-out-of-scope) |
-| 8 | Expanded eval, failure injection | partially absorbed into Phases 2 and 4 |
-
-Three deliberate departures from the original plan, all argued in `Decision.md`:
-the eval harness ships in Phase 1 rather than Phase 8 (otherwise Phase 2's
-"hybrid retrieval improved recall" claim has no baseline to compare against),
-tenancy lands in the schema in Phase 1 rather than Phase 5, and Phase 4's
-`search_github` and `query_metadata` tools were dropped once the first tool's
-evaluation showed the agent did not yet justify its cost.
 
 ## Project layout
 
