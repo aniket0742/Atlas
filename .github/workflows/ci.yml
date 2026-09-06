@@ -1,0 +1,174 @@
+# Atlas CI.
+#
+# Three gates, run in parallel: lint, unit tests, integration tests against a
+# real Postgres with pgvector.
+#
+# ## No secrets, by design
+#
+# Nothing here needs an API key. Every test runs against the deterministic
+# offline providers (`atlas.providers.fake`), so the suite exercises ingestion,
+# chunking, retrieval, the tool framework, the agent loop and the grounded
+# answering path without a single paid call. That is a property of the provider
+# abstraction (ADR-0007), and CI is where it pays off: a fork or a pull request
+# from outside the repository runs the full suite with no access to anything.
+#
+# The evaluation harness is deliberately NOT run here. It calls real models,
+# costs real money, and its results are frozen artifacts under eval/baselines/
+# rather than something to be regenerated on every push.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same branch makes the first run's answer irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Matches requires-python and the version the project is developed on.
+  # Deliberately not a matrix: fastembed pins onnxruntime, and claiming support
+  # for versions that have never been run would be a claim, not a test.
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      # `ruff check` only. `ruff format --check` is not gated: the codebase was
+      # never formatted with it, so adding the gate would fail on 17 files that
+      # have nothing wrong with them. Reformatting the repository to turn a gate
+      # green is a change to every blame line in service of nothing.
+      - name: Ruff
+        run: ruff check src tests scripts
+
+      # mypy is configured (strict) in pyproject but is NOT a gate. It reports
+      # 76 pre-existing errors, most of them `Any` returned from untyped
+      # third-party SDKs. A gate that has never been green is not a gate, and
+      # switching it on by loosening it to nothing would be worse. It stays
+      # available as `mypy` locally until the backlog is actually cleared.
+      - name: mypy (informational, never fails the build)
+        run: mypy || true
+
+  unit:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Unit tests
+        run: pytest -m "not integration" -q
+
+  integration:
+    name: integration tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Same image as docker-compose.yml. The extension matters: Atlas stores
+        # embeddings in a pgvector column with an HNSW index, so plain postgres
+        # would fail at migration 0001 rather than at some subtle later point.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: atlas
+          POSTGRES_PASSWORD: atlas
+          POSTGRES_DB: atlas
+        ports:
+          - 5432:5432
+        # Without this the job races the database and fails on connection
+        # rather than on anything it was meant to test.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      ATLAS_TEST_DATABASE_URL: postgresql://atlas:atlas@localhost:5432/atlas
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      # The integration suite skips itself when no database is reachable, which
+      # is right locally and dangerous here: a broken service container would
+      # produce a green build that tested nothing. This runs the same
+      # reachability check the fixture uses, so if it passes the suite cannot
+      # skip, and if it fails the build stops with the real reason.
+      - name: Verify Postgres is actually reachable
+        run: |
+          python - <<'PY'
+          import asyncio, os, sys
+          from atlas.db.pool import Database
+
+          async def main():
+              db = Database(os.environ["ATLAS_TEST_DATABASE_URL"])
+              await db.open()
+              await db.close()
+
+          try:
+              asyncio.run(main())
+          except Exception as exc:
+              sys.exit(f"Postgres unreachable, integration tests would silently skip: {exc}")
+          print("Postgres reachable")
+          PY
+
+      # Migrations are applied by the suite's own module fixture, so there is no
+      # separate migrate step: the tests exercise the real migration runner,
+      # including its checksum guard (ADR-0006), rather than a CI shortcut.
+      - name: Integration tests
+        run: pytest -m integration -q --junit-xml=integration-results.xml
+
+      # Belt and braces for the same failure mode as the precheck: the database
+      # could die between the two steps. A skipped integration suite must never
+      # be reported as a pass.
+      - name: Fail if any integration test was skipped
+        if: always()
+        run: |
+          python - <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse("integration-results.xml").getroot()
+          suite = root if root.tag == "testsuite" else root.find("testsuite")
+          tests = int(suite.get("tests", 0))
+          skipped = int(suite.get("skipped", 0))
+          if tests == 0:
+              sys.exit("no integration tests ran")
+          if skipped:
+              sys.exit(f"{skipped} of {tests} integration tests skipped; the gate proved nothing")
+          print(f"{tests} integration tests ran, none skipped")
+          PY

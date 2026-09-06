@@ -9,6 +9,51 @@ is usually a preference wearing a decision's clothes.
 
 **Status key:** `accepted` — implemented and in use. `provisional` — implemented
 but not yet validated by measurement. `deferred` — deliberately not done yet.
+`implemented but not default` — the code ships and is selectable, and the
+measurement said not to switch it on.
+
+That last status is the one worth noticing. Three significant pieces of work —
+lexical retrieval, hybrid fusion, and agent mode — are implemented, tested and
+**not** the default, because the evaluation did not support adopting them. The
+runs behind those decisions are committed under `eval/baselines/`.
+
+## Index
+
+| # | Decision | Status |
+|---|---|---|
+| [0001](#adr-0001-postgres-with-pgvector-not-a-dedicated-vector-database) | Postgres with pgvector, not a dedicated vector database | accepted |
+| [0002](#adr-0002-no-kafka-the-queue-is-postgres) | No Kafka; the queue is Postgres | accepted |
+| [0003](#adr-0003-tenant_id-on-every-table-from-the-first-migration) | `tenant_id` on every table from the first migration | accepted |
+| [0004](#adr-0004-embeddings-in-their-own-table-keyed-by-model) | Embeddings in their own table, keyed by model | accepted |
+| [0005](#adr-0005-hand-written-sql-with-psycopg-3-no-orm) | Hand-written SQL with psycopg 3, no ORM | accepted |
+| [0006](#adr-0006-plain-numbered-sql-migrations-not-alembic) | Plain numbered SQL migrations, not Alembic | accepted |
+| [0007](#adr-0007-local-onnx-embeddings-hosted-llm) | Local ONNX embeddings, hosted LLM | accepted |
+| [0008](#adr-0008-gemini-behind-a-two-method-provider-interface) | Gemini behind a provider interface | accepted |
+| [0009](#adr-0009-structure-aware-chunking-with-exact-character-offsets) | Structure-aware chunking with exact character offsets | **provisional** |
+| [0010](#adr-0010-groundedness-is-enforced-in-code-not-requested-in-the-prompt) | Groundedness enforced in code, not requested in the prompt | accepted |
+| [0011](#adr-0011-eval-labels-anchor-to-documents-and-snippets-never-to-chunk-ids) | Eval labels anchor to documents and snippets, never chunk ids | accepted |
+| [0012](#adr-0012-phase-1-ingests-synchronously-and-says-so) | Phase 1 ingests synchronously | superseded by 0022/0023 |
+| [0013](#adr-0013-the-similarity-floor-calibrated-at-060) | The similarity floor, calibrated at 0.60 | superseded by 0019 |
+| [0014](#adr-0014-ndcg-counts-gain-once-per-label) | nDCG counts gain once per label | accepted |
+| [0015](#adr-0015-a-static-inspection-console-not-a-frontend-framework) | A static inspection console, not a frontend framework | accepted |
+| [0016](#adr-0016-the-api-runs-in-docker-compose) | The API runs in Docker Compose | accepted |
+| [0017](#adr-0017-postgresql-full-text-search-not-bm25) | PostgreSQL full-text search, not BM25 | accepted |
+| [0018](#adr-0018-hybrid-retrieval-implemented-measured-and-not-adopted) | Hybrid retrieval implemented, measured, not adopted | **not default** |
+| [0019](#adr-0019-the-similarity-floor-is-a-query-level-gate-not-a-per-chunk-filter) | The similarity floor is a query-level gate | accepted |
+| [0020](#adr-0020-cross-encoder-reranking-adopted) | Cross-encoder reranking, adopted | **accepted, default on** |
+| [0021](#adr-0021-paired-bootstrap-replacing-comparison-of-independent-intervals) | Paired bootstrap, replacing independent intervals | accepted |
+| [0022](#adr-0022-the-ingestion-queue-is-a-postgres-table) | The ingestion queue is a Postgres table | accepted |
+| [0023](#adr-0023-post-v1documents-returns-202-and-the-break-is-not-versioned) | `POST /v1/documents` returns 202 | accepted |
+| [0024](#adr-0024-two-model-roles-and-gemini-35-flash-lite-for-the-answer) | Two model roles; `gemini-3.5-flash-lite` answers | accepted |
+| [0025](#adr-0025-gemini-31-flash-lite-routes-the-agents-tool-calls) | `gemini-3.1-flash-lite` routes tool calls | accepted |
+| [0026](#adr-0026-tool-guarantees-live-in-the-registry-not-in-the-tools) | Tool guarantees live in the registry | accepted |
+| [0027](#adr-0027-identity-is-carried-to-tools-never-derivable-by-them) | Identity is carried to tools, never derivable | accepted |
+| [0028](#adr-0028-the-search-tool-shows-the-model-snippets-and-keeps-the-chunks) | The search tool shows snippets, keeps chunks | accepted |
+| [0029](#adr-0029-the-agent-loop-gathers-evidence-it-does-not-write-the-answer) | The agent loop gathers evidence, does not answer | accepted |
+| [0030](#adr-0030-one-answering-path-two-ways-of-choosing-evidence) | One answering path, two ways of choosing evidence | accepted |
+| [0031](#adr-0031-the-agents-evidence-is-reranked-once-as-a-union-before-answering) | Agent evidence reranked once as a union | accepted |
+| [0032](#adr-0032-step-8-agent-mode-matches-plain-rag-recommendation-is-opt-in-not-default) | Agent mode matches plain RAG; opt-in, not default | **not default** |
+| [0033](#adr-0033-ci-gates-lint-and-both-test-suites-and-refuses-to-pass-on-a-skipped-suite) | CI gates lint and both test suites | accepted |
 
 ---
 
@@ -1688,3 +1733,69 @@ not the default path — which is what "opt-in" has meant since ADR-0029.
 materialises at a scale where 1.8× cost is worth measuring against, or a future
 tool (`query_metadata` or otherwise) changes what the agent can do enough that
 this comparison should be re-run rather than trusted as still current.
+
+---
+
+## ADR-0033: CI gates lint and both test suites, and refuses to pass on a skipped suite
+
+**Status:** accepted (Phase 4, follow-up)
+
+**Context.** The repository had no automated gate. Every claim about the test
+suite was a claim about what happened on one machine.
+
+**Decision.** Three parallel jobs on push and pull request
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)): `ruff check`, the 276
+unit tests, and the 41 integration tests against a `pgvector/pgvector:pg16`
+service container — the same image as `docker-compose.yml`, because plain
+Postgres would fail at migration 0001 rather than at some subtler later point.
+
+**No secrets are needed, and that is a design property rather than a
+convenience.** Every test runs against the deterministic offline providers, so
+the full suite — ingestion, chunking, retrieval, the tool framework, the agent
+loop, the grounded answering path — executes with no paid call and no API key.
+A pull request from a fork gets the same gate with access to nothing. This is
+the return on the provider `Protocol` from ADR-0007.
+
+**A skipped integration suite fails the build.** This is the decision worth
+recording. The suite calls `pytest.skip` when no database is reachable, which is
+correct locally and dangerous in CI: a broken service container yields a suite
+that skips every test and *exits zero*. Verified rather than assumed — pointing
+the DSN at a dead port produces "41 skipped" and a **zero exit status**, which
+GitHub would report green.
+
+Two guards, because they fail differently. A precheck opens a connection
+through the same `Database` class the fixture's own reachability check uses, so
+if it passes the fixture cannot skip; and a junit-XML assertion after the run
+catches anything between the two steps. Both were tested in both directions.
+
+**mypy is not a gate.** It is configured `strict` and reports 75 pre-existing
+errors, most of them `Any` returned from untyped third-party SDKs. A gate that
+has never been green is not a gate, and loosening the config until it passes
+would be worse than not running it. It runs in CI as informational output only.
+Clearing the backlog is real work with a real benefit; pretending it is done is
+neither.
+
+**`ruff format --check` is not a gate either.** The codebase was never formatted
+with it and 17 files would be rewritten. Reformatting every file to turn a gate
+green changes every blame line in service of nothing.
+
+**The evaluation harness does not run in CI.** It calls real models and costs
+real money — the four-model answer comparison alone was $0.73. Its outputs are
+frozen artifacts under `eval/baselines/`, which is what makes them comparable
+across time; regenerating them on every push would both cost money and destroy
+the property that makes them useful.
+
+**Found while doing this.** `ATLAS_LLM_PROVIDER=fake` is the setting
+`GeminiProvider` names in its own missing-key error message, and agent mode
+crashed on it: `FakeLLMProvider` had no `generate_with_tools`, so the first
+agent turn raised `AttributeError`. Answering worked offline and agent mode did
+not, on precisely the path a reader without an API key is told to take.
+
+`FakeLLMProvider` now issues one search and finishes, so the loop, the tool
+registry and the grounded answering path all run offline end to end. It picks
+the tool by *shape* — the first declaration with a single required string
+parameter — rather than by name, so adding a tool cannot silently break it. And
+`get_agent_llm` now returns `ToolCallingLLM` rather than `LLMProvider`, which is
+what its caller actually requires; the weaker annotation is what let a provider
+without tool calling reach `AgentPlanner` and fail at request time instead of at
+the type boundary.

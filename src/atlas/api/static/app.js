@@ -77,7 +77,7 @@ async function loadCorpus() {
 
     docs.replaceChildren();
     if (!documents.length) {
-      docs.append(el("li", "muted", "no documents indexed"));
+      docs.append(el("li", "empty", "no documents indexed"));
       return;
     }
     for (const d of documents) {
@@ -118,7 +118,7 @@ async function loadQueue() {
 
     list.replaceChildren();
     if (!data.jobs.length) {
-      list.append(el("li", "muted", "no jobs yet"));
+      list.append(el("li", "empty", "no jobs yet"));
       return;
     }
     for (const job of data.jobs) {
@@ -173,7 +173,7 @@ function renderCitations(citations) {
   $("citation-count").textContent = `${citations.length}`;
 
   if (!citations.length) {
-    list.append(el("li", "muted", "none — nothing in the answer is attributed to a retrieved chunk"));
+    list.append(el("li", "empty", "none — nothing in the answer is attributed to a retrieved chunk"));
     $("citations-panel").hidden = false;
     return;
   }
@@ -204,7 +204,7 @@ function renderEvidence(evidence) {
   $("evidence-count").textContent = `${evidence.length}`;
 
   if (!evidence.length) {
-    list.append(el("li", "muted", "nothing passed the similarity floor — the model was never called"));
+    list.append(el("li", "empty", "nothing passed the similarity floor — the model was never called"));
     $("evidence-panel").hidden = false;
     return;
   }
@@ -223,7 +223,7 @@ function renderEvidence(evidence) {
 
     const head = el("div", "ev-head");
     head.append(el("span", "ev-rank", `#${index + 1}`));
-    head.append(el("span", null, chunk.document_external_id || chunk.document_title || ""));
+    head.append(el("span", "ev-doc", chunk.document_external_id || chunk.document_title || ""));
     if (chunk.heading_path && chunk.heading_path.length) {
       head.append(el("span", null, `· ${chunk.heading_path.join(" / ")}`));
     }
@@ -273,6 +273,69 @@ function renderEvidence(evidence) {
   $("evidence-panel").hidden = false;
 }
 
+function renderTrace(trace) {
+  // Only agent responses carry a trace, so its absence is how the console
+  // knows which system answered -- no separate flag needed.
+  if (!trace) {
+    $("trace-panel").hidden = true;
+    $("answer-path").hidden = true;
+    return;
+  }
+  $("answer-path").hidden = false;
+
+  $("trace-stop").textContent = trace.stop_reason || "";
+
+  const summary = $("trace-summary");
+  summary.replaceChildren();
+  const chip = (label, value, cls) => {
+    const c = el("span", cls ? `chip ${cls}` : "chip");
+    c.append(el("b", null, label), document.createTextNode(` ${value}`));
+    summary.append(c);
+  };
+  chip("model", trace.model || "?", "chip-agent");
+  chip("iterations", trace.iterations ?? 0);
+  chip("tool calls", trace.tool_calls ?? 0);
+
+  const ev = trace.evidence || {};
+  if (ev.unique_before_rerank !== undefined) {
+    // Union size then final size: the gap is what the evidence cap removed.
+    chip("evidence", `${ev.unique_before_rerank} → ${ev.final_count}`);
+  }
+  if (ev.reranked) chip("union rerank", `${Math.round(ev.rerank_ms)} ms`, "chip-rerank");
+
+  if (trace.degraded) {
+    const badge = el("span", "badge badge-degraded", "degraded");
+    badge.title = trace.degraded_reason || "";
+    summary.append(badge);
+  }
+
+  // Searches, flattened across iterations in the order they were issued.
+  const list = $("trace-searches");
+  list.replaceChildren();
+  const calls = [];
+  for (const step of trace.steps || []) {
+    for (const call of step.tool_calls || []) calls.push(call);
+  }
+
+  if (!calls.length) {
+    list.append(el("li", "empty", "the model answered without searching"));
+  } else {
+    for (const call of calls) {
+      const row = el("li");
+      const query = (call.arguments && call.arguments.query) || call.tool;
+      row.append(el("span", "trace-query", query));
+      if (call.outcome === "ok") {
+        row.append(el("span", "trace-hits", `${call.result_count ?? "?"} hits · ${Math.round(call.duration_ms)} ms`));
+      } else {
+        row.append(el("span", "trace-hits trace-failed", call.outcome));
+      }
+      list.append(row);
+    }
+  }
+
+  $("trace-panel").hidden = false;
+}
+
 function renderTimings(data) {
   const info = $("retrieval-info");
   info.replaceChildren();
@@ -320,9 +383,29 @@ function renderTimings(data) {
 }
 
 function hideResults() {
-  for (const id of ["answer-panel", "citations-panel", "evidence-panel", "metrics-panel", "error"]) {
+  for (const id of ["answer-panel", "citations-panel", "evidence-panel",
+                    "metrics-panel", "trace-panel", "error"]) {
     $(id).hidden = true;
   }
+}
+
+/* The API rejects the single-search knobs when agent=true rather than ignoring
+ * them: they describe one search, and the agent runs several with parameters it
+ * picks. Disabling them here means the reader sees why instead of collecting a
+ * 400. */
+function syncAgentMode() {
+  const on = $("agent").checked;
+  $("agent-toggle").classList.toggle("on", on);
+  for (const [labelId, inputId] of [
+    ["lbl-mode", "mode"], ["lbl-topk", "top-k"],
+    ["lbl-minsim", "min-sim"], ["lbl-rerank", "rerank"],
+  ]) {
+    $(inputId).disabled = on;
+    $(labelId).classList.toggle("disabled", on);
+  }
+  $("ask-hint").textContent = on
+    ? "Agent mode: a routing model decides what to search for and may search several times, then the same grounded answering path writes the answer. The single-search controls are disabled because the agent chooses its own. Measured to cost ~1.8x plain retrieval for no significant quality gain — see ADR-0032."
+    : "Blank fields use the server defaults. Cross-encoder reranking costs roughly 700 ms per query on CPU. Responses are not streamed — the request blocks until the model returns.";
 }
 
 async function ask(event) {
@@ -333,16 +416,22 @@ async function ask(event) {
 
   hideResults();
   button.disabled = true;
-  button.textContent = "Asking…";
+  button.textContent = $("agent").checked ? "Running agent…" : "Asking…";
 
   const payload = { question, include_evidence: true };
-  const topK = $("top-k").value;
-  const minSim = $("min-sim").value;
-  const mode = $("mode").value;
-  if (topK !== "") payload.top_k = Number(topK);
-  if (minSim !== "") payload.min_similarity = Number(minSim);
-  if (mode !== "") payload.mode = mode;
-  if ($("rerank").checked) payload.rerank = true;
+  if ($("agent").checked) {
+    // Deliberately nothing else: sending a retrieval knob alongside agent=true
+    // is a 400 by design.
+    payload.agent = true;
+  } else {
+    const topK = $("top-k").value;
+    const minSim = $("min-sim").value;
+    const mode = $("mode").value;
+    if (topK !== "") payload.top_k = Number(topK);
+    if (minSim !== "") payload.min_similarity = Number(minSim);
+    if (mode !== "") payload.mode = mode;
+    if ($("rerank").checked) payload.rerank = true;
+  }
 
   try {
     const response = await fetch("/v1/query", {
@@ -357,6 +446,7 @@ async function ask(event) {
     }
     const data = await response.json();
     renderAnswer(data);
+    renderTrace(data.agent_trace);
     renderCitations(data.citations || []);
     renderEvidence(data.evidence || []);
     renderTimings(data);
@@ -458,6 +548,8 @@ async function pollJob(jobId, filename, status) {
 
 $("ask-form").addEventListener("submit", ask);
 $("upload-form").addEventListener("submit", upload);
+$("agent").addEventListener("change", syncAgentMode);
+syncAgentMode();
 loadHealth();
 loadCorpus();
 loadQueue();

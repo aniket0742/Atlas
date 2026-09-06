@@ -410,6 +410,100 @@ priced separately, with thinking folded into output.
 That identical input figure is also the check that retrieval really was held
 constant, rather than assumed to be.
 
+## Agent mode vs plain RAG (Phase 4, step 8)
+
+The question Phase 4 exists to answer: does letting a model plan the retrieval
+beat retrieving once? Frozen in
+[`eval/baselines/step8-agent-vs-plain/`](../eval/baselines/step8-agent-vs-plain),
+produced by `scripts/evaluate_agent.py`.
+
+Both systems run on the same 112 questions, in the same process, against the
+same retriever and reranker instances, so anything that differs is the system
+rather than the environment.
+
+### A stricter quality metric than the harness had
+
+`EvalRunner` measures citation *presence* — did a non-refused answer cite
+anything. That says nothing about whether it cited the **right** thing, which is
+the whole question here.
+
+So `atlas.eval.agent_compare` reuses the dataset's own label definition —
+`Label.matches(document, chunk_text)`, unchanged — and applies it to the chunks
+the answer actually **cited**, not the chunks that were merely retrieved. A
+label counts as satisfied only if some cited chunk carries it. Citation
+resolution already guarantees every cited id names a chunk in `Answer.retrieved`,
+so the lookup is exact rather than approximate.
+
+### Results
+
+| | plain RAG (default) | agent mode (opt-in) |
+|---|---|---|
+| citation recall, 100 answerable | 0.975 [0.94, 1.0] | 0.970 [0.93, 1.0] |
+| paired delta (agent − plain) | — | **−0.005**, CI [−0.04, 0.03] |
+| unanswerable correctly refused | 12/12 | 12/12 |
+| answerable wrongly refused | 0 | 0 |
+| unverified quotes | 6 | 6 |
+| errors / degraded runs | 0 | 0 / 0 |
+| cost per 1000 questions | $0.79 | $1.40 (**1.8x**) |
+| latency p50 / p95 | 3,286 / 4,286 ms | 5,132 / 7,050 ms |
+
+**96 of 100 answerable questions scored identically.** Four differed: two
+favoured the agent, two favoured plain RAG. The paired delta's interval crosses
+zero, and so does every per-kind interval — multi-doc [0.0, 0.3], identifier
+[0.0, 0.23], paraphrase [−0.16, 0.0], each touching zero at one edge.
+
+Refusal correctness and unverified-quote counts being *identical* is the
+expected result, not a coincidence: both systems share one answering path
+([ADR-0030](../Decision.md)), so the groundedness machinery cannot behave
+differently depending on how the evidence was gathered.
+
+### The four discordant questions
+
+Named, because four differences out of a hundred is a small enough number that
+aggregate statistics say less than the cases themselves.
+
+**Agent won:** `refund-window-by-plan` (multi-doc — plain cited one of two
+required documents, the agent's second search reached both) and
+`hybrid-flag-name` (identifier).
+
+**Agent lost:** both `paraphrase`, and both investigated rather than left as a
+number. In `revocation-delay` the union rerank ranked the correct document
+*first* and the answer model cited a different, genuinely relevant document
+instead — a citation choice, not a retrieval miss. In `queue-first-checks` the
+right document filled 3 of 7 evidence slots but the labelled line sat in a
+section none of the searches surfaced — a real retrieval-depth gap.
+
+### What this does and does not support
+
+**Supports:** the agent is bounded and robust — 0 errors, 0 degraded runs and 0
+bound-hits across 100 live executions — and it does not regress answer quality.
+
+**Does not support:** that it is worth its cost. It ships opt-in and off by
+default ([ADR-0032](../Decision.md)). The one place it shows promise,
+multi-document questions, rests on five instances, which is why E10 stays open
+rather than being marked solved.
+
+**Limits.** One run, not repeated. Earlier work established that the
+unverified-quote metric varies run to run (5, then 8, then 3 on identical
+configuration), so a single draw on a 112-question set is evidence, not proof.
+
+### An earlier diagnostic, kept
+
+Before this run, a 7-question experiment tested one hypothesis: that the agent's
+evidence ordering, not its searching, was what hurt answer quality
+([`eval/baselines/agent-rerank/`](../eval/baselines/agent-rerank)). It compared
+interleaved evidence against a single rerank of the deduplicated union, holding
+the agent's searches **fixed** by building both arms from one gathered plan —
+otherwise the ordering change would have been confounded with the model choosing
+different searches.
+
+Coverage across two runs: plain 26/26, interleave 23/26, union rerank 26/26.
+One difference reproduced and one did not; both are recorded, because discarding
+the inconvenient half of a small sample is how seven questions get talked into
+meaning more than they do. The union rerank was adopted
+([ADR-0031](../Decision.md)) because it never lost, cost no extra tokens, and
+stops relying on an ordering the score scale does not support.
+
 ## Planned experiments
 
 Recorded here in advance so results are not selected after the fact.
@@ -427,10 +521,14 @@ Recorded here in advance so results are not selected after the fact.
 | E9 | Why is lexical retrieval best on conceptual queries? | open — unexplained result from E5 |
 | E10 | Can anything help multi-document queries? | open — stuck at 0.400 for every configuration tested |
 | E11 | Which model should write the answer? | **done** — no measurable gain above `3.5-flash-lite` ([ADR-0024](../Decision.md)) |
-| E12 | Which model should route agent tool calls? | **done** — every candidate scored 8/8; benchmark saturated, chose on latency and cost |
+| E12 | Which model should route agent tool calls? | **done** — the rebuilt 16-case set scored 16/16 for every candidate; chose on latency and cost ([ADR-0025](../Decision.md)) |
+| E13 | Does reranking the agent's evidence union fix its ordering? | **done** — adopted; never worse, one reproducible win ([ADR-0031](../Decision.md)) |
+| E14 | Does agent mode beat plain RAG? | **done** — no significant difference at 1.8x cost; kept opt-in ([ADR-0032](../Decision.md)) |
 
 E9 and E10 were raised *by* the Phase 2 results rather than planned, and are
-recorded so they are not quietly forgotten.
+recorded so they are not quietly forgotten. E10 is still open: agent mode was
+the most plausible attack on it and produced one win out of five multi-document
+questions, which is not enough to close it.
 
 ## What this evaluation cannot tell you
 
@@ -450,4 +548,11 @@ Stated so the numbers are not over-read:
   validation before its scores meant anything.
 
 The last point is the honest ceiling of the current setup. Widening the dataset
-and adding a validated faithfulness judge is Phase 8 work.
+and adding a validated faithfulness judge would be the next real step.
+
+One qualification, added after the agent evaluation: answer quality is now
+scored *slightly* more strictly than "faithfulness is structural" implies. The
+plain-vs-agent comparison checks whether the answer's citations satisfy the
+question's gold labels, which is closer to correctness than citation presence
+is. It is still not a usefulness judgement, and it inherits every limit above —
+single annotator, synthetic corpus, 112 questions.

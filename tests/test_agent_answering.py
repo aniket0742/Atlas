@@ -341,3 +341,95 @@ def test_rerank_false_is_still_a_conflict_not_an_absent_value():
     body = schemas.QueryRequest(question="x", agent=True, rerank=False)
 
     assert agent_conflicts(body) == ["rerank"]
+
+
+# ---------------------------------------------------------------------------
+# Offline mode
+# ---------------------------------------------------------------------------
+#
+# `ATLAS_LLM_PROVIDER=fake` is what GeminiProvider's missing-key error tells a
+# reader to set. Before FakeLLMProvider learned tool calling, that path built an
+# agent whose first turn raised AttributeError: answering worked offline and
+# agent mode did not, on the one route someone without an API key is invited to
+# take. These pin it shut.
+
+
+def test_the_fake_provider_can_drive_the_agent_loop():
+    from atlas.providers.base import LLMProvider, ToolCallingLLM
+
+    fake = FakeLLMProvider()
+
+    assert isinstance(fake, LLMProvider)
+    assert isinstance(fake, ToolCallingLLM), "fake cannot be used as the agent model"
+
+
+def test_get_agent_llm_returns_a_tool_calling_provider_in_fake_mode():
+    from atlas.providers.base import ToolCallingLLM
+    from atlas.providers.factory import get_agent_llm
+
+    assert isinstance(get_agent_llm(settings()), ToolCallingLLM)
+
+
+def test_the_fake_searches_once_then_stops():
+    """It must terminate. A fake that always requests a tool would only ever
+    stop at the iteration bound, and every offline run would look degraded."""
+    from atlas.providers.base import ModelMessage, ToolCall, UserMessage
+
+    fake = FakeLLMProvider()
+    tools = SearchKnowledgeBaseTool(None).declaration()
+
+    first = fake.generate_with_tools(
+        system_instruction="s", history=[UserMessage(text="q")], tools=[tools]
+    )
+    assert [c.name for c in first.tool_calls] == ["search_knowledge_base"]
+    assert first.tool_calls[0].arguments == {"query": "q"}
+
+    second = fake.generate_with_tools(
+        system_instruction="s",
+        history=[UserMessage(text="q"), ModelMessage(tool_calls=(ToolCall(name="x"),))],
+        tools=[tools],
+    )
+    assert second.tool_calls == ()
+
+
+def test_the_fake_skips_a_tool_whose_arguments_it_cannot_fill():
+    """Chosen by shape, not by name, so adding a tool cannot silently break it."""
+    from atlas.providers.base import UserMessage
+
+    unfillable = {
+        "name": "two_required",
+        "description": "d",
+        "parameters": {
+            "type": "object",
+            "properties": {"a": {"type": "string"}, "b": {"type": "string"}},
+            "required": ["a", "b"],
+        },
+    }
+
+    turn = FakeLLMProvider().generate_with_tools(
+        system_instruction="s", history=[UserMessage(text="q")], tools=[unfillable]
+    )
+
+    assert turn.tool_calls == ()
+    assert turn.text
+
+
+async def test_an_agentic_answer_works_end_to_end_with_no_api_key():
+    """The whole path -- loop, tool, evidence, grounded answer -- offline."""
+    chunk = make_chunk("Refunds are issued within 30 days of purchase.")
+    config = settings()
+    retriever = FakeRetriever([chunk])
+    answerer = AnswerService(
+        StubDatabase([{"metadata": {}}]), retriever, FakeLLMProvider(), config  # type: ignore[arg-type]
+    )
+    registry = ToolRegistry([SearchKnowledgeBaseTool(retriever)])  # type: ignore[arg-type]
+    service = AgentAnswerService(
+        AgentPlanner(FakeLLMProvider(), registry, config), answerer, config  # type: ignore[arg-type]
+    )
+
+    answer = await service.answer("What is the refund window?", context())
+
+    assert not answer.refused
+    assert answer.citations[0].quote_verified
+    assert answer.agent_trace["tool_calls"] == 1
+    assert answer.agent_trace["degraded"] is False, "the loop fell back instead of searching"

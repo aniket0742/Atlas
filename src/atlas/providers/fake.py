@@ -22,7 +22,9 @@ from atlas.core.models import TokenUsage
 from atlas.providers.base import (
     AgentMessage,
     AgentTurn,
+    ModelMessage,
     ToolCall,
+    UserMessage,
 )
 
 _WORD = re.compile(r"[a-z0-9]+")
@@ -135,6 +137,65 @@ class FakeLLMProvider:
                 total_tokens=len(prompt.split()) + len(first_sentence.split()),
             ),
         )
+
+    def generate_with_tools(
+        self,
+        *,
+        system_instruction: str,
+        history: list[AgentMessage],
+        tools: list[dict[str, Any]],
+        timeout_seconds: float | None = None,
+    ) -> AgentTurn:
+        """Search once, then finish -- enough to run the agent loop offline.
+
+        Without this, `ATLAS_LLM_PROVIDER=fake` -- the setting the missing-key
+        error message tells you to use -- built an agent whose first turn raised
+        AttributeError. Answering worked and agent mode did not, on the one path
+        a reader without an API key is invited to take.
+
+        Returning *no* tool calls would have been simpler and would have worked,
+        because the loop falls back to a direct search (ADR-0029). But then the
+        offline mode would exercise only the degradation path and never the loop
+        it exists to demonstrate. So this issues one real call.
+
+        The tool is chosen by shape rather than by name -- the first declaration
+        with a single required string parameter -- so this fake does not have to
+        be edited every time a tool is added, and does not silently pick a tool
+        whose arguments it cannot fill.
+        """
+        self.calls.append({"system": system_instruction, "history": list(history)})
+
+        already_searched = any(isinstance(m, ModelMessage) and m.tool_calls for m in history)
+        target = None if already_searched else _first_single_string_tool(tools)
+
+        if target is None:
+            return AgentTurn(
+                text="Offline provider: no further searches.",
+                tool_calls=(),
+                usage=TokenUsage(prompt_tokens=len(history), output_tokens=8),
+            )
+
+        name, parameter = target
+        question = next(
+            (m.text for m in history if isinstance(m, UserMessage)),
+            "",
+        )
+        return AgentTurn(
+            text=None,
+            tool_calls=(ToolCall(name=name, arguments={parameter: question}),),
+            usage=TokenUsage(prompt_tokens=len(history), output_tokens=8),
+        )
+
+
+def _first_single_string_tool(tools: list[dict[str, Any]]) -> tuple[str, str] | None:
+    """(tool name, parameter name) for the first tool this fake can actually call."""
+    for tool in tools:
+        parameters = tool.get("parameters") or {}
+        required = parameters.get("required") or []
+        properties = parameters.get("properties") or {}
+        if len(required) == 1 and properties.get(required[0], {}).get("type") == "string":
+            return tool["name"], required[0]
+    return None
 
 
 class ScriptedToolCallingLLM:

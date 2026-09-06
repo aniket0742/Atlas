@@ -10,7 +10,12 @@ from __future__ import annotations
 from functools import lru_cache
 
 from atlas.config import Settings, get_settings
-from atlas.providers.base import EmbeddingProvider, LLMProvider, RerankProvider
+from atlas.providers.base import (
+    EmbeddingProvider,
+    LLMProvider,
+    RerankProvider,
+    ToolCallingLLM,
+)
 
 
 @lru_cache(maxsize=4)
@@ -53,8 +58,13 @@ def get_llm(settings: Settings | None = None) -> LLMProvider:
     return _build_llm(s, s.llm_model)
 
 
-def get_agent_llm(settings: Settings | None = None) -> LLMProvider:
+def get_agent_llm(settings: Settings | None = None) -> ToolCallingLLM:
     """The model that decides which tools to call.
+
+    Returns `ToolCallingLLM`, not `LLMProvider`: the agent loop needs
+    `generate_with_tools`, and annotating the weaker protocol let a provider
+    without it reach `AgentPlanner` and fail at request time instead of at the
+    type boundary. Both concrete providers satisfy it.
 
     A distinct role, not merely a distinct setting. Routing is high-volume and
     cheap; answering is low-volume and is where quality shows. They also draw on
@@ -65,7 +75,13 @@ def get_agent_llm(settings: Settings | None = None) -> LLMProvider:
     empirically rather than assumed.
     """
     s = settings or get_settings()
-    return _build_llm(s, s.agent_model)
+    llm = _build_llm(s, s.agent_model)
+    if not isinstance(llm, ToolCallingLLM):
+        raise TypeError(
+            f"{type(llm).__name__} cannot be used as the agent model: it does not "
+            "implement generate_with_tools."
+        )
+    return llm
 
 
 @lru_cache(maxsize=4)

@@ -30,7 +30,7 @@
       <form id="ask-form">
         <textarea id="question" rows="3" placeholder="e.g. How long do customers have to request a refund?" required></textarea>
         <div class="controls">
-          <label>retrieval
+          <label id="lbl-mode">retrieval
             <select id="mode">
               <option value="">server default</option>
               <option value="dense">dense</option>
@@ -38,18 +38,21 @@
               <option value="hybrid">hybrid</option>
             </select>
           </label>
-          <label>top_k
+          <label id="lbl-topk">top_k
             <input id="top-k" type="number" min="1" max="50" placeholder="8">
           </label>
-          <label>min_similarity
+          <label id="lbl-minsim">min_similarity
             <input id="min-sim" type="number" min="0" max="1" step="0.01" placeholder="0.55">
           </label>
-          <label class="check">
+          <label id="lbl-rerank" class="check">
             <input id="rerank" type="checkbox"> rerank
+          </label>
+          <label id="agent-toggle" class="toggle-agent">
+            <input id="agent" type="checkbox"> agent mode
           </label>
           <button id="ask-btn" type="submit">Ask</button>
         </div>
-        <p class="hint">Blank fields use the server defaults. Cross-encoder reranking costs roughly 700ms per query on CPU. Responses are not streamed — the request blocks until the model returns.</p>
+        <p class="hint" id="ask-hint">Blank fields use the server defaults. Cross-encoder reranking costs roughly 700&nbsp;ms per query on CPU. Responses are not streamed — the request blocks until the model returns.</p>
       </form>
     </div>
 
@@ -59,21 +62,33 @@
     </div>
 
     <div id="answer-panel" class="panel" hidden>
-      <h2>Answer <span id="answer-badge" class="badge"></span></h2>
+      <h2>Answer
+        <span id="answer-badge" class="badge"></span>
+        <span id="answer-path" class="badge badge-agent" hidden>agent</span>
+      </h2>
       <p id="refusal-reason" class="refusal" hidden></p>
       <div id="answer-text" class="answer"></div>
     </div>
 
+    <!-- Agent trace: only rendered when the response carries one, i.e. when
+         the request opted into agent mode. -->
+    <div id="trace-panel" class="panel" hidden>
+      <h2>Agent trace <span id="trace-stop" class="count"></span></h2>
+      <div id="trace-summary" class="trace-summary"></div>
+      <ol id="trace-searches" class="trace-searches"></ol>
+      <p class="hint">The searches the routing model chose, in order. Evidence from every search is deduplicated and reranked once against the original question before answering — a single comparable ordering, since cross-encoder scores from different searches are not comparable.</p>
+    </div>
+
     <div id="citations-panel" class="panel" hidden>
       <h2>Citations <span id="citation-count" class="count"></span></h2>
-      <p class="hint">A citation is only shown if its id matched a chunk actually sent to the model. <em>verbatim</em> means the quote was found character-for-character in that chunk.</p>
       <ol id="citations" class="citations"></ol>
+      <p class="hint">A citation is only shown if its id matched a chunk actually sent to the model. <em>verbatim</em> means the quote was found character-for-character in that chunk.</p>
     </div>
 
     <div id="evidence-panel" class="panel" hidden>
       <h2>Retrieved chunks <span id="evidence-count" class="count"></span></h2>
-      <p class="hint">The chunks the model was given, in final rank order. Each shows every component that contributed: dense similarity, lexical rank, the fused RRF score, and the reranker score where it ran.</p>
       <ol id="evidence" class="evidence"></ol>
+      <p class="hint">The chunks the model was given, in final rank order, each showing every component that contributed: dense similarity, lexical rank, the fused RRF score, and the reranker score where it ran.</p>
     </div>
 
   </section>
@@ -89,7 +104,7 @@
 
     <div class="panel">
       <h2>Corpus</h2>
-      <dl id="stats" class="metrics"><dd class="muted">loading…</dd></dl>
+      <dl id="stats" class="metrics"><dd class="loading">loading…</dd></dl>
     </div>
 
     <div class="panel">
@@ -101,20 +116,20 @@
         </label>
         <button id="upload-btn" type="submit">Upload &amp; index</button>
       </form>
-      <p class="hint">Upload returns immediately with a job id; a worker does the indexing. The document is not searchable until its job succeeds.</p>
       <div id="upload-status" class="upload-status" hidden></div>
+      <p class="hint">Upload returns immediately with a job id; a worker does the indexing. The document is not searchable until its job succeeds.</p>
     </div>
 
     <div class="panel">
       <h2>Ingestion queue</h2>
-      <dl id="queue-stats" class="metrics"><dd class="muted">loading…</dd></dl>
+      <dl id="queue-stats" class="metrics"><dd class="loading">loading…</dd></dl>
       <ul id="jobs" class="documents"></ul>
       <p class="hint">Depth alone cannot tell "busy" from "stuck" — a queue holding steady with work completing is healthy. <em>oldest pending</em> is what separates them.</p>
     </div>
 
     <div class="panel">
       <h2>Documents</h2>
-      <ul id="documents" class="documents"><li class="muted">loading…</li></ul>
+      <ul id="documents" class="documents"><li class="loading">loading…</li></ul>
     </div>
 
   </aside>
