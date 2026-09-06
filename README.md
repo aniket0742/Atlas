@@ -5,8 +5,8 @@
 A retrieval platform that answers questions about an organisation's own
 documents, with citations, and refuses when the answer is not in the corpus.
 
-**Status: Phase 4 complete.** Retrieval, asynchronous ingestion, and a bounded
-agent/tool framework are implemented and evaluated.
+**Status: complete.** Retrieval (dense, hybrid, reranking), asynchronous
+ingestion, and a bounded agent/tool framework are implemented and evaluated.
 
 The evaluation is the point. Four significant pieces of work — lexical
 retrieval, hybrid fusion, hybrid-plus-reranking, and agent mode — are
@@ -23,16 +23,13 @@ in [`docs/evaluation.md`](docs/evaluation.md).
 
 ## The problem
 
-An organisation's knowledge is spread across policy documents, engineering docs,
-wikis and repositories. People ask questions whose answers exist somewhere in
-that material, and finding them is a search problem that keyword search handles
-badly and that a general-purpose chatbot handles worse — because a chatbot with
-no access to the corpus will answer anyway.
-
-The failure mode that matters is not "the system could not find the answer". It
-is "the system produced a confident, plausible, wrong answer, and nothing in the
-response indicated which parts were grounded." Atlas is built around preventing
-that specific outcome.
+An organisation's knowledge is spread across policy documents, engineering
+docs, wikis and repositories — a search problem keyword search handles badly
+and a general-purpose chatbot handles worse, since a chatbot with no access to
+the corpus answers anyway. The failure mode that matters is not "the system
+could not find the answer" but "the system produced a confident, plausible,
+wrong answer with nothing indicating which parts were grounded." Atlas is
+built around preventing that specific outcome.
 
 ## What makes this different from a "chat with your PDFs" demo
 
@@ -109,7 +106,7 @@ flowchart TB
 ```
 
 **Solid is the default path.** Dashed amber is agent mode — opt-in, off by
-default, and measured to give no significant quality gain at ~1.8x the cost
+default, measured to give no significant quality gain at ~1.8x the cost
 ([ADR-0032](Decision.md#adr-0032-step-8-agent-mode-matches-plain-rag-recommendation-is-opt-in-not-default)).
 Both paths converge on **one** answering step — same prompt, same
 server-generated ids, same citation resolution and refusal downgrade either way
@@ -136,26 +133,21 @@ One process, one database. The API also serves the inspection console at `/`
 | UI | plain HTML/CSS/JS served by FastAPI | same-origin, no build step, no npm ([ADR-0015](Decision.md)) |
 | Queue | Postgres `SELECT ... FOR UPDATE SKIP LOCKED` | enqueue shares a transaction with the write; no broker ([ADR-0002](Decision.md), [ADR-0022](Decision.md)) |
 | Local env | Docker Compose (api + worker + postgres + redis) | one command starts everything ([ADR-0016](Decision.md)) |
-| Tests | pytest | 276 unit tests run with no database and no API key; 41 more need only Postgres |
+| Tests | pytest | 276 unit tests, no database or API key; 41 more need only Postgres |
 | CI | GitHub Actions | lint + both suites on every push, no secrets required ([ADR-0033](Decision.md)) |
 
 ## Running it locally
 
-### Prerequisites
-
-- Python 3.11+
-- Docker Desktop (for Postgres with pgvector)
-- A Gemini API key from <https://aistudio.google.com/apikey> — free tier is
-  sufficient. Not needed for the test suite.
-
-### Setup
+**Prerequisites:** Python 3.11+, Docker Desktop, and a Gemini API key from
+<https://aistudio.google.com/apikey> (free tier — not needed for the test
+suite).
 
 ```bash
 cp .env.example .env            # then put your GEMINI_API_KEY in it
 docker compose up -d --build    # api + postgres + redis; migrations run on start
 ```
 
-Then open **<http://localhost:8000>**. That's the whole setup — no host Python
+Open **<http://localhost:8000>**. That's the whole setup — no host Python
 needed ([ADR-0016](Decision.md)). The first query downloads ~67MB of ONNX
 weights into the `atlas_models` volume; they survive rebuilds.
 
@@ -163,30 +155,21 @@ For the CLI, tests, or the eval harness, add a local environment:
 
 ```bash
 python -m venv .venv
-.venv/Scripts/activate          # Windows;  source .venv/bin/activate elsewhere
+.venv/Scripts/activate          # Windows; source .venv/bin/activate elsewhere
 pip install -e ".[dev]"
 ```
 
-### Confirm your model
-
-Free-tier availability changes and isn't reliably documented per model:
-
-```bash
-atlas models                    # lists what your key can actually reach
-```
-
-Set `ATLAS_LLM_MODEL` in `.env` to one of those, then **recreate**, don't
-restart:
+**Confirm your model** — free-tier availability isn't reliably documented, so
+ask the key rather than assume, then set `ATLAS_LLM_MODEL` in `.env` and
+**recreate** rather than restart (`env_file` is read at container *creation*,
+so a restart keeps the old config while code changes still take effect):
 
 ```bash
+atlas models                                # lists what your key can actually reach
 docker compose up -d --force-recreate api worker
 ```
 
-`env_file` is read at container *creation*. `restart` reuses the existing
-container's environment, so code changes take effect (source is bind-mounted)
-but config changes silently don't — the console keeps reporting the old model.
-
-### Index and ask
+**Index and ask:**
 
 ```bash
 atlas ingest eval/corpus --source handbook
@@ -196,17 +179,14 @@ atlas query "How long do customers have to request a refund?"
 atlas query "How many vacation days do employees get?"   # should refuse
 ```
 
-Or run the API on the host instead of in a container:
-
-```bash
-atlas serve                     # http://127.0.0.1:8000
-```
+Or run the API on the host instead of in a container: `atlas serve`
+(<http://127.0.0.1:8000>).
 
 ## Inspection console
 
 `http://localhost:8000` serves a single-page console for driving and inspecting
-the system. It is a technical instrument rather than a chat product: everything
-it shows is something the API already returns.
+the system — a technical instrument, not a chat product: everything it shows is
+something the API already returns.
 
 | Panel | Shows |
 |---|---|
@@ -220,25 +200,19 @@ it shows is something the API already returns.
 | Add a document | upload a file; returns a job id immediately and polls it to completion |
 | Ingestion queue | pending / running / succeeded / dead counts, oldest pending age, and per-job errors with a requeue button |
 
-Switching the retrieval mode and re-asking the same question is the quickest way
-to see hybrid fusion working: the per-component chips show a chunk's dense rank,
-its lexical rank, and the fused score that put it where it is.
+Re-asking the same question under a different retrieval mode is the quickest
+way to see hybrid fusion working, via the per-component chips showing dense
+rank, lexical rank, and the fused score. The **verbatim badge** makes the
+otherwise invisible groundedness guarantee visible: a citation is only listed
+if its id matched a chunk actually sent to the model, and the badge says
+whether the quote was found character-for-character in it.
 
-The **verbatim badge** is the panel worth looking at: it makes the otherwise
-invisible groundedness guarantee visible. A citation is only listed at all if its
-id matched a chunk actually sent to the model, and the badge says whether the
-quote was found character-for-character in that chunk.
-
-Turning **agent mode** on disables the single-search controls, because the API
-rejects them rather than silently ignoring them: they describe one search, and
-the agent runs several with parameters it chooses. Reporting a `top_k` that
-never applied would misdescribe what ran.
-
-Responses are **not streamed** — the request blocks until the model returns, and
-the console says so rather than animating text that has already arrived
-([ADR-0015](Decision.md)). Uploads are asynchronous: the upload returns a job id
-immediately and the console polls that job, because claiming success on the 202
-would report a document as searchable before any worker had touched it.
+Agent mode disables the single-search controls (the API rejects them rather
+than ignoring them). Responses are **not streamed**, so the console shows a
+spinner rather than animating text that has already arrived
+([ADR-0015](Decision.md)); uploads poll the job rather than trusting the 202,
+since claiming success there would report a document searchable before any
+worker touched it.
 
 ## API
 
@@ -255,10 +229,6 @@ would report a document as searchable before any worker had touched it.
 | `GET` | `/v1/jobs/{id}` | one job's status, attempts and error |
 | `POST` | `/v1/jobs/{id}/requeue` | return a dead-letter job to the queue |
 
-`POST /v1/query` returns per-stage timings and token usage on every response, so
-the numbers Phase 6 (observability) and Phase 8 (evaluation) need are available
-from the start rather than requiring an API change later.
-
 ```bash
 curl -s localhost:8000/v1/query -H 'content-type: application/json' \
   -d '{"question":"What happens after a chargeback?","include_evidence":true}'
@@ -273,16 +243,12 @@ Combining `agent` with the single-search knobs (`top_k`, `mode`, `rerank`,
 `min_similarity`, `source_ids`) is a **400**, not a silent ignore — they
 describe one search, and the agent runs several with parameters it chooses.
 
-**`POST /v1/documents` returns 202, not 201.** The document is queued, not
-indexed — it is *not* searchable when the response arrives. Poll
-`GET /v1/jobs/{job_id}`. This is a deliberate unversioned break; the reasoning is
-in [ADR-0023](Decision.md). One consequence: document-type validation moved into
-the worker, so a file this endpoint accepts can still fail, surfacing as a
-dead-lettered job rather than a 415.
-
-Error codes are meaningful: `413` too large, `422` empty upload, `502` the model
-provider failed, `504` the model provider timed out. Atlas being healthy while
-its upstream is not is a distinct condition.
+**`POST /v1/documents` returns 202, not 201** — the document is queued, not
+indexed, so poll `GET /v1/jobs/{job_id}`. A deliberate unversioned break
+([ADR-0023](Decision.md)): document-type validation moved into the worker, so
+a file this endpoint accepts can still fail as a dead-lettered job rather than
+a 415. Error codes are otherwise meaningful: `413` too large, `422` empty
+upload, `502`/`504` the model provider failed or timed out.
 
 ## Ingestion
 
@@ -292,21 +258,20 @@ atlas jobs                    # queue depth and recent jobs
 atlas worker --once           # drain the queue in the foreground, then exit
 ```
 
-Uploads enqueue a job **in the same transaction that creates the source**, which
-is the property a message broker cannot provide without an outbox table — and an
-outbox table is a Postgres queue with an extra hop ([ADR-0002](Decision.md)).
-
-Reliability behaviour, all covered by tests:
+Uploads enqueue a job **in the same transaction that creates the source**,
+which is the property a message broker cannot provide without an outbox table
+([ADR-0002](Decision.md)). Reliability behaviour, all covered by tests:
 
 - **Concurrent workers never claim the same job** (`SKIP LOCKED`).
 - **A crashed worker loses no work.** Jobs carry a lease; a reaper returns
-  expired ones to the queue. Attempts are counted at *claim* time, so a document
-  that reliably kills workers exhausts its budget instead of cycling forever.
+  expired ones to the queue. Attempts are counted at *claim* time, so a
+  document that reliably kills workers exhausts its budget instead of
+  cycling forever.
 - **Retries back off exponentially with jitter**, then land in a dead-letter
-  state that **keeps its payload** so it can be requeued once the cause is fixed.
-- **Unparseable documents are not retried** — the same bytes fail identically, so
-  retrying only burns the budget and delays the real error.
-- **Duplicate delivery is safe.** Deterministic ids plus the content-hash
+  state that **keeps its payload** so it can be requeued once the cause is
+  fixed.
+- **Unparseable documents are not retried** — the same bytes fail identically.
+- **Duplicate delivery is safe** — deterministic ids plus a content-hash
   short-circuit make reprocessing converge rather than duplicate.
 
 ## Evaluation
@@ -350,16 +315,15 @@ satisfy the gold labels
 | paired delta (agent − plain) | — | **−0.005**, CI crosses zero |
 | cost / latency vs. plain | — | **1.8x cost, +56–64% latency** |
 
-96 of 100 questions scored identically; of the four that differed, two favoured
-each system. **No measured quality gain justifies the cost**, so agent mode
-ships opt-in and off by default
+96 of 100 questions scored identically; of the four that differed, two
+favoured each system. **No measured quality gain justifies the cost**, so
+agent mode ships opt-in and off by default
 ([ADR-0032](Decision.md#adr-0032-step-8-agent-mode-matches-plain-rag-recommendation-is-opt-in-not-default)).
 
 All comparisons use a **paired** bootstrap over per-query differences, not
-independent-interval overlap — the correction and why it matters are in
-[ADR-0021](Decision.md). Four pieces of work (lexical, hybrid, hybrid+rerank,
-agent mode) were implemented, measured, and **not adopted as default**; every
-rejected run is committed, not deleted.
+independent-interval overlap ([ADR-0021](Decision.md)). Four pieces of work
+(lexical, hybrid, hybrid+rerank, agent mode) were implemented, measured, and
+**not adopted as default**; every rejected run is committed, not deleted.
 
 ## Testing
 
@@ -371,24 +335,20 @@ docker compose up -d && docker compose stop worker && pytest -m integration
 ```
 
 All 317 tests run on every push ([`.github/workflows/ci.yml`](.github/workflows/ci.yml))
-against a real `pgvector` Postgres, with **no API key**: every test uses the
+against a real `pgvector` Postgres, with **no API key** — every test uses the
 deterministic offline providers, so a fork runs the whole suite with access to
-nothing. The evaluation harness is deliberately not in CI — it calls real models
-and costs real money; its results are frozen under `eval/baselines/` instead.
+nothing. The evaluation harness is deliberately not in CI: it calls real models
+and costs real money, so its results are frozen under `eval/baselines/` instead.
 
-The integration job fails if its tests *skip*. They skip when no database is
-reachable, which is right locally and would otherwise mean a broken service
-container produced a green build that tested nothing.
-
-The integration tests cover the properties that are hard to reason about without
-a database: idempotent re-ingestion, version replacement without orphaned chunks,
-concurrent ingestion of the same document, tenant isolation, and refusal on an
-empty corpus.
+The integration job fails if its tests *skip* rather than run — a broken
+service container silently skipping every test would otherwise still report
+green. Those tests cover what's hard to reason about without a database:
+idempotent re-ingestion, version replacement without orphaned chunks,
+concurrent ingestion, tenant isolation, and refusal on an empty corpus.
 
 ## Known limitations
 
-Current, and honest — see [Deliberately out of scope](#deliberately-out-of-scope)
-for what was decided against rather than merely not yet measured:
+Current, and honest:
 
 - **Chunking is unvalidated.** Implemented and tested, but not measured against
   fixed-size chunking. Marked `provisional` ([ADR-0009](Decision.md)).
@@ -411,24 +371,12 @@ for what was decided against rather than merely not yet measured:
   plain RAG at 1.8x cost; ships opt-in for that reason
   ([ADR-0032](Decision.md#adr-0032-step-8-agent-mode-matches-plain-rag-recommendation-is-opt-in-not-default)).
 - **`mypy --strict` reports 75 errors**, mostly `Any` from untyped SDKs. CI runs
-  it as informational output, not a gate — a gate that's never been green isn't
-  one ([ADR-0033](Decision.md)).
-
-## Deliberately out of scope
-
-Not "not done yet" — decided against for this project, so that what *is* built
-could be built properly and measured.
-
-| Area | Status | Why |
-|---|---|---|
-| **Authentication / RBAC** | out of scope | Every request is attributed to one configured tenant. The tenant *plumbing* is complete and enforced in every query and at the tool boundary ([ADR-0003](Decision.md), [ADR-0027](Decision.md)); what is absent is the identity layer that would populate it. Building isolation first and identity later is the safe order — the reverse is how cross-tenant leaks happen. |
-| **Observability stack** | out of scope | No OpenTelemetry, Prometheus or dashboards. Structured logs carry the fields that would feed them (tool name, outcome, duration, tenant, request id), and the evaluation harness measures what a dashboard would only display. |
-| **Deployment / infrastructure** | out of scope | The container image is a development image: editable install, root user, bind-mounted source. No TLS, no autoscaling, no load testing. This is a system to be read and run locally, not operated. |
-| **Caching** | out of scope | Redis is in `docker-compose.yml` and unused. Caching before there is a measured latency problem optimises a guess. |
-| **`query_metadata` tool** | deferred | A second agent tool for Atlas's own operational data (queue depth, failed ingestions, last-indexed time). Deliberately not built: the first tool has not yet justified the agent's cost, and adding a second would add code without changing that conclusion. |
-| **Full tool-trace panel** | deferred | The console shows the agent's searches and stop reason, not a per-tool-event timeline. The trace is returned in full by the API for anyone who wants it. |
-| **Streaming responses** | deferred | `/v1/query` returns one complete response ([ADR-0015](Decision.md)). |
-
+  it as informational output, not a gate ([ADR-0033](Decision.md)).
+- **No authentication, observability stack, deployment hardening or caching.**
+  Tenant isolation is enforced in the schema and at the tool boundary
+  ([ADR-0003](Decision.md), [ADR-0027](Decision.md)) with no identity layer on
+  top of it; the container image is a development image; Redis is present and
+  unused. This is a system meant to be read and run locally, not operated.
 
 ## Project layout
 

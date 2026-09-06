@@ -11,3 +11,6 @@ dist/
 build/
 eval/results/
 desktop.ini
+
+# Local scratch notes, never pushed -- see local-notes/possible-future-work.md
+local-notes/
