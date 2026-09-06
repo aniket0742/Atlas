@@ -11,8 +11,6 @@ from __future__ import annotations
 
 import uuid
 
-from tests.conftest import make_chunk
-
 from atlas.agent.knowledge_base import (
     SNIPPET_CHARS,
     SearchKnowledgeBaseTool,
@@ -20,6 +18,7 @@ from atlas.agent.knowledge_base import (
 )
 from atlas.agent.tools import ToolContext, ToolOutcome, ToolRegistry
 from atlas.retrieval.service import RetrievalResult
+from tests.conftest import make_chunk
 
 TENANT = uuid.uuid5(uuid.NAMESPACE_DNS, "caller-tenant")
 OTHER_TENANT = uuid.uuid5(uuid.NAMESPACE_DNS, "victim-tenant")

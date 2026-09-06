@@ -9,9 +9,9 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from tests.conftest import make_chunk
 
 from atlas.retrieval.fusion import DEFAULT_RRF_K, reciprocal_rank_fusion
+from tests.conftest import make_chunk
 
 
 def chunks(n: int, prefix: str = "c") -> list:

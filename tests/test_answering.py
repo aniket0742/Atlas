@@ -9,12 +9,12 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from tests.conftest import StubDatabase, make_chunk
 
 from atlas.answer.prompts import AnswerOut, build_prompt
 from atlas.answer.service import AnswerService
 from atlas.core.models import TokenUsage
 from atlas.providers.base import LLMError
+from tests.conftest import StubDatabase, make_chunk
 
 
 class ScriptedLLM:

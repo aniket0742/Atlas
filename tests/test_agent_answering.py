@@ -14,9 +14,6 @@ from __future__ import annotations
 
 import uuid
 
-from tests.conftest import StubDatabase, make_chunk
-from tests.test_search_tool import FakeRetriever
-
 from atlas.agent.knowledge_base import SearchKnowledgeBaseTool
 from atlas.agent.loop import AgentPlanner
 from atlas.agent.service import AgentAnswerService
@@ -25,6 +22,8 @@ from atlas.answer.service import UNCITED_MESSAGE, AnswerService
 from atlas.config import Settings
 from atlas.core.models import TokenUsage
 from atlas.providers.fake import FakeLLMProvider, ScriptedToolCallingLLM
+from tests.conftest import StubDatabase, make_chunk
+from tests.test_search_tool import FakeRetriever
 
 TENANT = uuid.uuid5(uuid.NAMESPACE_DNS, "caller-tenant")
 QUESTION = "What is the refund window and who approves exceptions?"

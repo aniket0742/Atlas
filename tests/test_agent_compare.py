@@ -11,11 +11,10 @@ from __future__ import annotations
 
 import uuid
 
-from tests.conftest import make_chunk
-
 from atlas.core.models import Citation
 from atlas.eval.agent_compare import PairedReport, SystemOutcome, citation_recall, summarize
 from atlas.eval.dataset import Label
+from tests.conftest import make_chunk
 
 
 def citation_for(chunk, quote: str | None = None) -> Citation:
