@@ -36,39 +36,26 @@ that specific outcome.
 
 ## What makes this different from a "chat with your PDFs" demo
 
-Three things are enforced in code rather than requested in a prompt:
+Enforced in code, not requested in a prompt:
 
 - **A citation cannot name a source that was not retrieved.** Evidence ids are
-  server-generated per request; the model's cited ids are validated against that
-  exact set, and anything else is discarded.
-- **A quote is checked against the chunk it cites.** Verbatim match required;
-  mismatches are surfaced and counted, not silently accepted.
-- **An answer with no resolvable citation is converted into a refusal.** An
-  uncited answer from a retrieval system is indistinguishable from a guess.
+  server-generated per request and validated against that exact set.
+- **A quote is checked verbatim against the chunk it cites.** Mismatches are
+  surfaced and counted, not silently accepted.
+- **An uncited answer is converted into a refusal**, not served as a guess.
+- **`tenant_id` is on every table and every query from the first migration**,
+  with ids derived from the tenant — even though there is a single tenant and no
+  authentication today. Retrofitting isolation is how cross-tenant leaks happen.
+- **A tool may not declare `tenant_id` as an argument at all.** A poisoned
+  document instructing the model to "search tenant acme-corp" has nowhere to
+  land — tested with real injection payloads ([ADR-0027](Decision.md)).
+- **Techniques that did not help were not shipped as defaults.** Lexical
+  retrieval, hybrid fusion, hybrid+reranking and agent mode are all
+  implemented, tested, and off — the rejected runs are committed next to the
+  adopted ones so the claims are checkable, not asserted.
 
-One thing is enforced in the schema: **`tenant_id` is on every table and in
-every query from the first migration**, with document ids derived from the tenant
-so two tenants uploading identical files get different ids by construction — even
-though there is a single tenant and no authentication today. Cross-tenant leakage
-is the worst bug this system could have, and retrofitting isolation is how it
-happens.
-
-One thing is enforced at the tool boundary: **a tool may not declare
-`tenant_id` as an argument at all.** Registration refuses it, so a poisoned
-document instructing the model to "search tenant acme-corp" has nowhere to land.
-Identity travels in a frozen server-built context, never on a path the model can
-write to, and there are tests using real injection payloads
-([ADR-0027](Decision.md)).
-
-And one thing is enforced by measurement: **techniques that did not help were
-not shipped as defaults.** Lexical retrieval, hybrid fusion, hybrid with
-reranking, and agent mode are all implemented, tested, and off by default,
-because the numbers did not support them. The rejected runs are committed next
-to the adopted ones, so the claims are checkable rather than asserted.
-
-Reasoning for these and every other significant choice is in
-[`Decision.md`](Decision.md), which now opens with an index of all 33 decisions
-and their status.
+Reasoning for every significant choice is in [`Decision.md`](Decision.md),
+which opens with an index of all 33 decisions and their status.
 
 ## Architecture
 
@@ -121,26 +108,17 @@ flowchart TB
     class DB,Q storage
 ```
 
-**Solid path is the default.** The dashed amber path is agent mode: opt-in per
-request, off unless you ask for it, and measured in
-[ADR-0032](Decision.md#adr-0032-step-8-agent-mode-matches-plain-rag-recommendation-is-opt-in-not-default)
-to produce no significant quality improvement over the default at ~1.8x the
-cost. It is kept because it is correct, bounded and tested — not because it won.
+**Solid is the default path.** Dashed amber is agent mode — opt-in, off by
+default, and measured to give no significant quality gain at ~1.8x the cost
+([ADR-0032](Decision.md#adr-0032-step-8-agent-mode-matches-plain-rag-recommendation-is-opt-in-not-default)).
+Both paths converge on **one** answering step — same prompt, same
+server-generated ids, same citation resolution and refusal downgrade either way
+([ADR-0030](Decision.md#adr-0030-one-answering-path-two-ways-of-choosing-evidence)).
+The agent only ever chooses *which* evidence arrives.
 
-Both paths converge on **one** answering step. There is no second, looser
-answering path for the agent: the same prompt, the same server-generated
-evidence ids, the same citation resolution and the same refusal downgrade apply
-either way ([ADR-0030](Decision.md#adr-0030-one-answering-path-two-ways-of-choosing-evidence)).
-The agent chooses *which* evidence arrives; it never writes the answer and is
-never asked for a citation.
-
-The API also serves a static inspection console at `/` — see
-[Inspection console](#inspection-console).
-
-One process, one database. Redis is in `docker-compose.yml` for Phase 6 but is
-not used yet. There is no message broker — see
-[ADR-0002](Decision.md#adr-0002-no-kafka-the-queue-is-postgres)
-for why Kafka was considered and rejected.
+One process, one database. The API also serves the inspection console at `/`
+(below). Redis is in `docker-compose.yml`, unused; there is no message broker
+([ADR-0002](Decision.md#adr-0002-no-kafka-the-queue-is-postgres)).
 
 ## Technology
 
@@ -177,15 +155,11 @@ cp .env.example .env            # then put your GEMINI_API_KEY in it
 docker compose up -d --build    # api + postgres + redis; migrations run on start
 ```
 
-Then open **<http://localhost:8000>**.
+Then open **<http://localhost:8000>**. That's the whole setup — no host Python
+needed ([ADR-0016](Decision.md)). The first query downloads ~67MB of ONNX
+weights into the `atlas_models` volume; they survive rebuilds.
 
-That is the whole setup. The API is containerised ([ADR-0016](Decision.md)), so
-no host Python environment is needed to run Atlas. The first query downloads
-~67MB of ONNX embedding weights into the `atlas_models` volume, where they
-survive image rebuilds.
-
-For the CLI, the test suite, or the eval harness, you also want a local
-environment:
+For the CLI, tests, or the eval harness, add a local environment:
 
 ```bash
 python -m venv .venv
@@ -195,26 +169,22 @@ pip install -e ".[dev]"
 
 ### Confirm your model
 
-Free-tier model availability changes and is not reliably documented per model, so
-Atlas does not hard-code a claim about it:
+Free-tier availability changes and isn't reliably documented per model:
 
 ```bash
 atlas models                    # lists what your key can actually reach
 ```
 
-Set `ATLAS_LLM_MODEL` in `.env` to one of those.
-
-**After changing `.env`, recreate the containers — do not restart them:**
+Set `ATLAS_LLM_MODEL` in `.env` to one of those, then **recreate**, don't
+restart:
 
 ```bash
 docker compose up -d --force-recreate api worker
 ```
 
-`env_file` is read when a container is *created*, not when it starts. `docker
-compose restart` reuses the existing container with its original environment, so
-code changes appear (the source is bind-mounted) while configuration changes
-silently do not. The symptom is confusing: the console keeps reporting the old
-model and the old API key while `.env` clearly says otherwise.
+`env_file` is read at container *creation*. `restart` reuses the existing
+container's environment, so code changes take effect (source is bind-mounted)
+but config changes silently don't — the console keeps reporting the old model.
 
 ### Index and ask
 
@@ -292,23 +262,16 @@ from the start rather than requiring an API change later.
 ```bash
 curl -s localhost:8000/v1/query -H 'content-type: application/json' \
   -d '{"question":"What happens after a chargeback?","include_evidence":true}'
-```
 
-**Agent mode is opt-in per request**, `"agent": true`, and off by default so the
-plain path is unchanged for existing callers. The response then carries an
-`agent_trace` describing the searches the model chose, the stop reason, the
-evidence union before and after reranking, and whether it degraded to a plain
-search:
-
-```bash
+# agent=true is opt-in and off by default; the response then carries an
+# agent_trace (searches issued, stop reason, evidence union before/after rerank).
 curl -s localhost:8000/v1/query -H 'content-type: application/json' \
   -d '{"question":"What is the refund window, and who approves exceptions?","agent":true}'
 ```
 
 Combining `agent` with the single-search knobs (`top_k`, `mode`, `rerank`,
-`min_similarity`, `source_ids`) is a **400**, not a silent ignore. They describe
-one search; the agent runs several with parameters it chooses, so honouring them
-on some searches and not others would report a configuration that never ran.
+`min_similarity`, `source_ids`) is a **400**, not a silent ignore — they
+describe one search, and the agent runs several with parameters it chooses.
 
 **`POST /v1/documents` returns 202, not 201.** The document is queued, not
 indexed — it is *not* searchable when the response arrives. Poll
@@ -348,98 +311,55 @@ Reliability behaviour, all covered by tests:
 
 ## Evaluation
 
-Retrieval quality is measured, not asserted. The methodology, the label format
-and its rationale are in [`docs/evaluation.md`](docs/evaluation.md).
+Retrieval quality is measured, not asserted. Full methodology, per-kind
+breakdowns and every frozen run are in
+[`docs/evaluation.md`](docs/evaluation.md) and [`eval/baselines/`](eval/baselines);
+this section is the headline numbers only.
 
 ```bash
-atlas eval eval/datasets/smoke.jsonl               # retrieval only; free, no LLM
+atlas eval eval/datasets/smoke.jsonl                 # retrieval only; free, no LLM
 atlas eval eval/datasets/smoke.jsonl --with-answers  # adds refusal + citation metrics
 ```
 
-Reports are JSON, written to `eval/results/`, and each one records the full
-configuration that produced it — embedding model, chunk parameters, `k`,
-similarity floor. A retrieval number without those is not comparable to anything.
+**Retrieval**, 112 queries over 33 documents (149 chunks):
 
-Metrics reported: Recall@k, Precision@k, MRR, nDCG@k, each with a 95% bootstrap
-confidence interval, plus (with `--with-answers`) refusal correctness in both
-directions, citation coverage, unverified-quote count, latency percentiles and
-token totals.
-
-The shipped dataset has 19 queries (16 answerable, 3 unanswerable). That is a
-smoke set for catching regressions, not a benchmark, and the confidence intervals
-are wide enough to say so. Overlapping intervals mean no measured difference.
-
-**Measured** on 112 queries over 33 documents (149 chunks), retrieval only:
-
-| configuration | Recall@1 | nDCG@8 | retrieval p50 | adopted |
+| configuration | Recall@1 | nDCG@8 | p50 | adopted |
 |---|---|---|---|---|
 | dense (baseline) | 0.780 | 0.895 | 77 ms | — |
-| lexical | 0.620 | 0.805 | 2 ms | no — significantly worse |
-| hybrid (RRF) | 0.720 | 0.881 | 70 ms | no — no measured difference |
+| lexical | 0.620 | 0.805 | 2 ms | no — worse |
+| hybrid (RRF) | 0.720 | 0.881 | 70 ms | no — no difference |
 | **dense + rerank** | **0.850** | **0.939** | 750 ms | **yes** |
-| hybrid + rerank | 0.850 | 0.935 | 758 ms | no — hybrid adds nothing here |
+| hybrid + rerank | 0.850 | 0.935 | 758 ms | no — adds nothing over rerank |
 
-**Answer quality**, measured on the same 112 queries with retrieval held
-constant (`eval/baselines/answer-models/`): every candidate model refused 12/12
-unanswerable questions, wrongly refused 0 of 100 answerable ones, and produced a
-resolvable citation on 100/100 answers. Models differ only in verbatim-quoting
-fidelity, and `gemini-3.8-flash` is **not measurably better** than the selected
-`gemini-3.5-flash-lite` at 4x the cost ([ADR-0024](Decision.md)).
+**Answer quality**, same 112 queries, retrieval held constant: every candidate
+model refused 12/12 unanswerable and wrongly refused 0/100 answerable.
+`gemini-3.5-flash-lite` was selected because `gemini-3.8-flash` is **not
+measurably better** at 4x the cost ([ADR-0024](Decision.md)). Tool-routing
+accuracy saturated at 16/16 for every candidate tested; `gemini-3.1-flash-lite`
+won on latency and cost ([ADR-0025](Decision.md),
+[`eval/baselines/agent-routing/`](eval/baselines/agent-routing)).
 
-**Tool routing**, 16 hand-built cases whose correct behaviour is known in
-advance, including cases where the correct action is *not* to search
-([`eval/baselines/agent-routing/`](eval/baselines/agent-routing)):
-
-| model | tool-selection accuracy | unnecessary searches | mean latency | $/1k questions |
-|---|---|---|---|---|
-| **gemini-3.1-flash-lite** | 16/16 | 0 | **2,568 ms** | **$0.36** |
-| gemini-3.5-flash-lite | 16/16 | 0 | 2,724 ms | $0.58 |
-| gemini-3.7-flash | 16/16 | 0 | 4,684 ms | $1.83 |
-
-Routing accuracy saturated at 16/16 for every candidate, so the choice was made
-on latency and cost. An earlier 8-case benchmark saturated at 8/8 for all six
-candidates tested; a benchmark that cannot separate candidates cannot justify
-choosing one, which is why it was rebuilt around the failure modes routing
-actually has ([ADR-0025](Decision.md)).
-
-**Agent mode vs plain RAG**, the same 112 questions through both systems, paired
-([`eval/baselines/step8-agent-vs-plain/`](eval/baselines/step8-agent-vs-plain)).
-Quality is scored by whether a question's gold labels are satisfied by a chunk
-the answer actually **cited** — stricter than "did it produce a citation":
+**Agent mode vs. plain RAG**, the same 112 questions through both systems,
+paired, scored by whether the answer's *citations* (not just its retrieval)
+satisfy the gold labels
+([`eval/baselines/step8-agent-vs-plain/`](eval/baselines/step8-agent-vs-plain)):
 
 | | plain RAG (default) | agent mode (opt-in) |
 |---|---|---|
-| citation recall, 100 answerable | 0.975 [0.94, 1.0] | 0.970 [0.93, 1.0] |
-| paired delta (agent − plain) | — | **−0.005**, CI [−0.04, 0.03] |
-| unanswerable correctly refused | 12/12 | 12/12 |
-| answerable wrongly refused | 0 | 0 |
-| unverified quotes | 6 | 6 |
-| errors / degraded runs | 0 | 0 / 0 |
-| cost per 1000 questions | $0.79 | $1.40 (**1.8x**) |
-| latency p50 / p95 | 3,286 / 4,286 ms | 5,132 / 7,050 ms (**+56% / +64%**) |
+| citation recall, 100 answerable | 0.975 | 0.970 |
+| paired delta (agent − plain) | — | **−0.005**, CI crosses zero |
+| cost / latency vs. plain | — | **1.8x cost, +56–64% latency** |
 
-**96 of 100 answerable questions scored identically.** Of the four that
-differed, two favoured the agent and two favoured plain RAG. The paired delta's
-confidence interval crosses zero, and so does every per-kind breakdown.
-
-So agent mode ships **opt-in and off by default**. It is bounded, robust (0
-errors and 0 degraded runs across 100 live executions) and its authorization
-boundary is tested against prompt-injection payloads — but no measured quality
-gain justifies 1.8x cost and ~60% more latency on this corpus
+96 of 100 questions scored identically; of the four that differed, two favoured
+each system. **No measured quality gain justifies the cost**, so agent mode
+ships opt-in and off by default
 ([ADR-0032](Decision.md#adr-0032-step-8-agent-mode-matches-plain-rag-recommendation-is-opt-in-not-default)).
-The one place it shows promise is genuine multi-document questions, from a
-sample of five, which is not enough to act on.
 
-Comparisons use a **paired** bootstrap over per-query differences, not overlap of
-independent intervals. The rule registered before the experiments used the
-latter, which is the wrong test for paired data; the correction and the reasons
-it is not post-hoc rationalisation are in [ADR-0021](Decision.md).
-
-Four significant pieces of work — lexical retrieval, hybrid fusion, hybrid with
-reranking, and agent mode — were implemented, measured, and **not adopted as
-the default**. That is the intended outcome of measuring rather than assuming,
-and the runs behind each rejection are committed in
-[`eval/baselines/`](eval/baselines).
+All comparisons use a **paired** bootstrap over per-query differences, not
+independent-interval overlap — the correction and why it matters are in
+[ADR-0021](Decision.md). Four pieces of work (lexical, hybrid, hybrid+rerank,
+agent mode) were implemented, measured, and **not adopted as default**; every
+rejected run is committed, not deleted.
 
 ## Testing
 
@@ -467,53 +387,32 @@ empty corpus.
 
 ## Known limitations
 
-Current, and honest:
+Current, and honest — see [Deliberately out of scope](#deliberately-out-of-scope)
+for what was decided against rather than merely not yet measured:
 
-- **Chunking is unvalidated.** Structure-aware chunking is implemented and its
-  invariants are tested, but whether it beats fixed-size chunking on this corpus
-  has not been measured. Marked `provisional`. ([ADR-0009](Decision.md))
-- **No authentication.** Every request is attributed to one configured tenant.
-  The tenant plumbing is complete; the identity layer is Phase 5.
-- **Multi-document queries are unsolved.** Questions needing evidence from two
-  documents score Recall@1 of 0.400 under *every* configuration tested. No
-  retrieval strategy here helps; it is an open problem, not a tuning gap.
-- **Reranking costs ~680ms per query.** Adopted because the quality gain is
-  measured and significant, but it is the dominant retrieval cost. Disable with
-  `ATLAS_RERANK_ENABLED=false`.
-- **The similarity floor no longer separates.** At 33 documents, 10 of 12
-  unanswerable queries score above it. It is an interim crash barrier at 0.55,
-  not a validated threshold ([ADR-0019](Decision.md)).
-- **Lexical search is English-only** (`to_tsvector('english', ...)`) and is
-  PostgreSQL FTS rather than BM25 ([ADR-0017](Decision.md)).
-- **Embedding throughput is a concern.** *Measured* at roughly 350 ms per
-  ~250-token chunk on one laptop CPU with the quantised ONNX build. Fine
-  interactively, slow for bulk ingestion. Phase 6 target.
-- **No OCR.** Scanned PDFs fail ingestion with an explicit message rather than
-  indexing as empty.
-- **No streaming.** `/v1/query` returns one complete response, so the console
-  shows a spinner for the duration of the model call rather than incremental
-  text. Deferred deliberately ([ADR-0015](Decision.md)).
-- **The container image is a development image.** Editable install, root user,
-  bind-mounted source. Phase 7 produces a deployment image.
-- **Prompt injection is contained, not solved.** Retrieved text cannot mint a
-  citation, and it cannot change *whose* data a tool reads: a tool may not
-  declare `tenant_id` at all, so the attack has nowhere to land, and this is
-  tested against poisoned-document payloads
-  ([ADR-0027](Decision.md)). What retrieved text *can* still do is influence
-  what the agent searches for next — wasting a turn or degrading an answer. And
-  a document that states something false will be faithfully reported as stating
-  it. ([ADR-0010](Decision.md))
-- **Agent mode is not proven useful.** Measured against plain RAG on 112
-  questions it shows no significant quality difference at 1.8x cost and ~60%
-  more latency. It ships opt-in for that reason
+- **Chunking is unvalidated.** Implemented and tested, but not measured against
+  fixed-size chunking. Marked `provisional` ([ADR-0009](Decision.md)).
+- **Multi-document queries are unsolved.** Recall@1 of 0.400 under *every*
+  retrieval configuration tested — an open problem, not a tuning gap.
+- **The similarity floor (0.55) no longer separates.** At 33 documents, 10 of 12
+  unanswerable queries score above it; it's a crash barrier, not a validated
+  threshold ([ADR-0019](Decision.md)).
+- **Lexical search is English-only**, PostgreSQL FTS rather than BM25
+  ([ADR-0017](Decision.md)).
+- **Embedding throughput**: ~350ms per ~250-token chunk on one laptop CPU. Fine
+  interactively, slow for bulk ingestion.
+- **No OCR.** Scanned PDFs fail ingestion explicitly rather than indexing empty.
+- **Prompt injection is contained, not solved.** A tool cannot be told whose
+  data to read — tested with poisoned-document payloads
+  ([ADR-0027](Decision.md)) — but retrieved text can still steer what the agent
+  searches for, and a false document is faithfully reported as saying so
+  ([ADR-0010](Decision.md)).
+- **Agent mode is not proven useful.** No significant quality difference vs.
+  plain RAG at 1.8x cost; ships opt-in for that reason
   ([ADR-0032](Decision.md#adr-0032-step-8-agent-mode-matches-plain-rag-recommendation-is-opt-in-not-default)).
-  The one suggestive result — multi-document questions — rests on five
-  instances.
-- **`mypy --strict` does not pass.** It is configured and reports 75 errors,
-  most of them `Any` returned from untyped third-party SDKs. CI runs it as
-  informational output and does not gate on it: a gate that has never been
-  green is not a gate, and loosening the config until it passed would be worse
-  than leaving the backlog visible ([ADR-0033](Decision.md)).
+- **`mypy --strict` reports 75 errors**, mostly `Any` from untyped SDKs. CI runs
+  it as informational output, not a gate — a gate that's never been green isn't
+  one ([ADR-0033](Decision.md)).
 
 ## Deliberately out of scope
 
